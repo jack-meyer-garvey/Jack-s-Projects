@@ -522,8 +522,8 @@ def textFlicker(root, canvas, text):
 
 def startOpeningScene():
     clearWindow()
-    pygame.mixer.music.load('nocturne.mp3')
-    pygame.mixer.music.play(loops=-1)
+    pygame.mixer.music.load('PreludeInCMinor.mp3')
+    pygame.mixer.music.play(loops=-1, fade_ms=20000)
     Character.canvas.create_text(width / 2, height / 2, text=" by Jack Meyer Garvey", fill="white", font="system 32")
     loop = Character.root.after(2800, openingScene)
     Character.loopsRunning.append(loop)
@@ -531,28 +531,22 @@ def startOpeningScene():
 
 def openingScene():
     clearWindow()
-    img1 = PhotoImage(file='spotLight.png')
-    Character.imageSave.append(img1)
-    Character.imageSave.append(Character.canvas.create_image(int(1024 * 1.3) / 2, 0, anchor='n', image=img1))
-    img = PhotoImage(file='Chair Guy1.png')
-    Character.imageSave.append(img)
-    Character.imageSave.append(
-        Character.canvas.create_image(int(1024 * 1.3) / 2 - 25, int(768 * 1.1) / 2 - 100, anchor='n', image=img))
-    Character.controlled = Character('blueBox.png', dynamic=False)
-    PlatformerTextbox.textBox('Hello, press X to advance text.', face='GuyFaceBox3.png',
-                              exitFunctions=[lambda: Character.root.after(2000, tutorial)])
-    PlatformerTextbox.textBox('Welcome to the tutorial. The point in the game where I monologue and you mash through text.', face='GuyFaceBox4.png')
-    PlatformerTextbox.textBox(
-        'In a moment you will be free to impact your own experience.',
-        face='GuyFaceBox3.png')
-    PlatformerTextbox.textBox(
-        'You see this little blue square? That\'s you.',
-        face='GuyFaceBox.png', openFunctions=[lambda: Character.controlled.spawnChar(300, 420)])
-    PlatformerTextbox.textBox(
-        'Lets get started then.',
-        face='GuyFaceBox3.png')
+    You = Character('BlackFloor.png', dynamic=False)
+    You.spawnChar(0, height / 2 + 63.01)
+    You = Character('WhiteWall.png', dynamic=False)
+    You.spawnChar(-64, height / 2 - 1024.01 + 63)
+    You = Character('WhiteWall.png', dynamic=False)
+    You.spawnChar(width, height / 2 - 1024.01 + 63)
+    You = Character(pic='BlueBox.png', pic2='WhiteBox.png')
+    You.y__['gravity'] = 0.002
+    setLevelSize(width, height)
+    PlatformerTextbox.textBox('Hello, welcome to the tutorial. You may advance text by pressing X.', face='GuyFaceBox3.png')
+    PlatformerTextbox.textBox('You are a small blue box',
+                              face='GuyFaceBox3.png', openFunctions=[lambda: You.spawnChar(width / 2, height / 2)])
+    PlatformerTextbox.textBox('then, what happens if you press the left control stick?',
+                              face='GuyFaceBox3.png', openFunctions=[lambda: gainControl(You), physicsLoop], exitFunctions=[tutorial])
 
-    loop = Character.root.after(1700, PlatformerTextbox.runQueue)
+    loop = Character.root.after(500, PlatformerTextbox.runQueue)
     Character.loopsRunning.append(loop)
 
 
@@ -602,7 +596,6 @@ def clearWindow():
     PlatformerTextbox.textBox.loopsRunning.clear()
     for widget in Character.root.winfo_children():
         widget.destroy()
-    Character.instances.clear()
     PlatformerTextbox.textBox.instances.clear()
     PlatformerTextbox.textBox.textQueue.clear()
     PlatformerTextbox.textBox.questionQueue.clear()
