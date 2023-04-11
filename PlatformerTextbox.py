@@ -5,22 +5,25 @@ import collections
 
 
 class Canvas(Canvas):
-    def unbind(self, sequence, funcid=None):
+    def unbind(self, sequence, funcId=None):
         """
         See:
             https://stackoverflow.com/questions/6433369/
             deleting-and-changing-a-tkinter-event-binding-in-python
         """
 
-        if not funcid:
+        if not funcId:
+            # noinspection PyUnresolvedReferences
             self.tk.call('bind', self._w, sequence, '')
             return
+        # noinspection PyUnresolvedReferences
         func_callbacks = self.tk.call(
             'bind', self._w, sequence, None).split('\n')
         new_callbacks = [
-            l for l in func_callbacks if l[6:6 + len(funcid)] != funcid]
+            lo for lo in func_callbacks if lo[6:6 + len(funcId)] != funcId]
+        # noinspection PyUnresolvedReferences
         self.tk.call('bind', self._w, sequence, '\n'.join(new_callbacks))
-        self.deletecommand(funcid)
+        self.deletecommand(funcId)
 
 
 def queueText(textSpeed, text, options, condition, face):
@@ -228,7 +231,6 @@ class textBox:
         textBox.openFunctions.append(openFunctions)
         for _ in exitFunctions:
             textBox.exitFunctions.append(_)
-
         sentences = re.split('(?<=[.?!]\")(?=[\s$\"])|(?<=[.?!])(?=[\s$])', text)
         if len(options) != 0:
             maxChar = 30

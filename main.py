@@ -416,8 +416,6 @@ class Character:
     fastFall = True
     screenAdjustY = 450
 
-    # Avoids garbage collection
-    imageSave = []
     loopsRunning = []
 
     xLevelSize = 1024
@@ -486,22 +484,25 @@ def setScreenPositionY(y):
 
 
 class Canvas(Canvas):
-    def unbind(self, sequence, funcid=None):
+    def unbind(self, sequence, funcId=None):
         """
         See:
             https://stackoverflow.com/questions/6433369/
             deleting-and-changing-a-tkinter-event-binding-in-python
         """
 
-        if not funcid:
+        if not funcId:
+            # noinspection PyUnresolvedReferences
             self.tk.call('bind', self._w, sequence, '')
             return
+        # noinspection PyUnresolvedReferences
         func_callbacks = self.tk.call(
             'bind', self._w, sequence, None).split('\n')
         new_callbacks = [
-            l for l in func_callbacks if l[6:6 + len(funcid)] != funcid]
+            lo for lo in func_callbacks if lo[6:6 + len(funcId)] != funcId]
+        # noinspection PyUnresolvedReferences
         self.tk.call('bind', self._w, sequence, '\n'.join(new_callbacks))
-        self.deletecommand(funcid)
+        self.deletecommand(funcId)
 
 
 def startGame():
@@ -523,9 +524,10 @@ def textFlicker(root, canvas, text):
 def startOpeningScene():
     clearWindow()
     pygame.mixer.music.load('PreludeInCMinor.mp3')
-    pygame.mixer.music.play(loops=-1, fade_ms=20000)
-    Character.canvas.create_text(width / 2, height / 2, text=" by Jack Meyer Garvey", fill="white", font="system 32")
-    loop = Character.root.after(2800, openingScene)
+    pygame.mixer.music.play(loops=-1, fade_ms=3000)
+    Character.canvas.create_text(width / 2, height / 2, text=" by Jack Meyer Garvey", fill="white",
+                                 font="system 32")
+    loop = Character.root.after(2500, openingScene)
     Character.loopsRunning.append(loop)
 
 
@@ -539,14 +541,19 @@ def openingScene():
     You.spawnChar(width, height / 2 - 1024.01 + 63)
     You = Character(pic='BlueBox.png', pic2='WhiteBox.png')
     You.y__['gravity'] = 0.002
+    You.spawnChar(width / 2 - 32, height / 2)
     setLevelSize(width, height)
-    PlatformerTextbox.textBox('Hello, welcome to the tutorial. You may advance text by pressing X.', face='GuyFaceBox3.png')
-    PlatformerTextbox.textBox('You are a small blue box',
-                              face='GuyFaceBox3.png', openFunctions=[lambda: You.spawnChar(width / 2, height / 2)])
-    PlatformerTextbox.textBox('then, what happens if you press the left control stick?',
-                              face='GuyFaceBox3.png', openFunctions=[lambda: gainControl(You), physicsLoop], exitFunctions=[tutorial])
+    PlatformerTextbox.textBox('Hello, Press X to advance the text.', face='GuyFaceBox3.png')
+    PlatformerTextbox.textBox('In this game, you are a blue box.',
+                              face='GuyFaceBox3.png', openFunctions=[lambda: gainControl(You), physicsLoop])
+    PlatformerTextbox.textBox('To move, use the left control stick.',
+                              face='GuyFaceBox3.png')
+    PlatformerTextbox.textBox('To jump, press A.', face='GuyFaceBox3.png')
+    PlatformerTextbox.textBox('You may also jump midair. This is called a double jump.', face='GuyFaceBox3.png')
+    PlatformerTextbox.textBox('Try heading to the right.', face='GuyFaceBox3.png',
+                              openFunctions=[lambda: setLevelSize(width + 1000, height)])
 
-    loop = Character.root.after(500, PlatformerTextbox.runQueue)
+    loop = Character.root.after(3000, PlatformerTextbox.runQueue)
     Character.loopsRunning.append(loop)
 
 
@@ -583,7 +590,6 @@ def tutorial():
 def clearWindow():
     """Destroys all widgets and ends all loops (including loops within text boxes)"""
     Character.instances.clear()
-    Character.imageSave.clear()
     if Character.nextFrame is not None:
         Character.root.after_cancel(Character.nextFrame)
         Character.nextFrame = None
@@ -613,8 +619,8 @@ def clearWindow():
 
 
 if __name__ == '__main__':
-    width = int(1024*1.3)
-    height = int(768*1.1)
+    width = int(1024 * 1.3)
+    height = int(768 * 1.1)
     Character.root = Tk()
     PlatformerTextbox.textBox.root = Character.root
     Character.root.geometry(f"{width}x{height}")
