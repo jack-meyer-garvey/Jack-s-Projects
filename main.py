@@ -442,6 +442,7 @@ class Character:
         if pic2 is not None:
             self.image2 = PhotoImage(file=pic2)
         self.dynamic = dynamic
+        self.mass = 1
 
         self.newX = 0
         self.newY = 0
@@ -533,24 +534,29 @@ def startOpeningScene():
 
 def openingScene():
     clearWindow()
-    You = Character('BlackFloor.png', dynamic=False)
-    You.spawnChar(0, height / 2 + 63.01)
-    You = Character('WhiteWall.png', dynamic=False)
-    You.spawnChar(-64, height / 2 - 1024.01 + 63)
-    You = Character('WhiteWall.png', dynamic=False)
-    You.spawnChar(width, height / 2 - 1024.01 + 63)
+    Character('BlackFloor.png', dynamic=False).spawnChar(0, height / 2 + 63.01)
+    Character('WhiteWall.png', dynamic=False).spawnChar(-64, height / 2 - 1024.01 + 63)
+    Character('WhiteWall.png', dynamic=False).spawnChar(width, height / 2 - 1024.01 + 63)
+    Character('WhiteFloor.png', dynamic=False).spawnChar(width + 0.1, height / 2 + 63.01)
+    You = Character('BlueBoxDot.png')
+    You.y__['gravity'] = 0.002
+    You.spawnChar(0, -64)
+
     You = Character(pic='BlueBox.png', pic2='WhiteBox.png')
     You.y__['gravity'] = 0.002
     You.spawnChar(width / 2 - 32, height / 2)
     setLevelSize(width, height)
+    gainControl(You)
+    physicsLoop()
+
     PlatformerTextbox.textBox('Hello, Press X to advance the text.', face='GuyFaceBox3.png')
     PlatformerTextbox.textBox('In this game, you are a blue box.',
-                              face='GuyFaceBox3.png', openFunctions=[lambda: gainControl(You), physicsLoop])
+                              face='GuyFaceBox3.png')
     PlatformerTextbox.textBox('To move, use the left control stick.',
                               face='GuyFaceBox3.png')
     PlatformerTextbox.textBox('To jump, press A.', face='GuyFaceBox3.png')
-    PlatformerTextbox.textBox('You may also jump midair. This is called a double jump.', face='GuyFaceBox3.png')
-    PlatformerTextbox.textBox('Try heading to the right.', face='GuyFaceBox3.png',
+    PlatformerTextbox.textBox('', face='GuyFaceBox3.png')
+    PlatformerTextbox.textBox('Try heading to the left.', face='GuyFaceBox3.png',
                               openFunctions=[lambda: setLevelSize(width + 1000, height)])
 
     loop = Character.root.after(3000, PlatformerTextbox.runQueue)
@@ -559,6 +565,9 @@ def openingScene():
 
 def tutorial():
     clearWindow()
+    You = Character('WhiteWall.png', dynamic=False)
+    You.spawnChar(600 + 1000, 460)
+
     You = Character('WhiteWall.png', dynamic=False)
     You.spawnChar(600 + 1000, 460)
 
