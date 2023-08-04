@@ -7,25 +7,6 @@ def physicsLoop(dt=30):
     # Queue the next frame
     Character.nextFrame = Character.root.after(dt, physicsLoop)
     newHash = {}
-    for P in Character.instances:
-        # Apply velocity
-        P.x += P.x_ * dt
-        P.y += P.y_ * dt
-        # prepare for collision detection
-        P.newX = P.x
-        P.newY = P.y
-        P.newX_ = P.x_
-        P.newY_ = P.y_
-        # update the Spacial Hash Table
-        for _ in range(int(P.x // 64) - 1, int(P.x + P.image.width()) // 64):
-            for __ in range(int(P.y // 64) - 1, int(P.y + P.image.height()) // 64):
-                if (_, __) not in newHash:
-                    newHash[(_, __)] = list()
-                newHash[(_, __)].append(P)
-    Character.hashTable = newHash
-
-    # Check for collisions and apply collision functions
-    checkCollision(dt)
 
     # Complete checks for the character controls
     if Character.controlled is not None:
@@ -60,6 +41,36 @@ def physicsLoop(dt=30):
 
             else:
                 Character.controlled.x_ = 0.3
+
+    for P in Character.instances:
+        # Apply velocity
+        P.x += P.x_ * dt
+        P.y += P.y_ * dt
+        # prepare for collision detection
+        P.newX = P.x
+        P.newY = P.y
+        P.newX_ = P.x_
+        P.newY_ = P.y_
+        # update the Spacial Hash Table
+        for _ in range(int(P.x // 64) - 1, int(P.x + P.image.width()) // 64):
+            for __ in range(int(P.y // 64) - 1, int(P.y + P.image.height()) // 64):
+                if (_, __) not in newHash:
+                    newHash[(_, __)] = list()
+                if P not in newHash[(_, __)]:
+                    newHash[(_, __)].append(P)
+    Character.hashTable = newHash
+    # Check for collisions and apply collision functions
+    checkCollision(dt)
+
+    # update coordinates of the picture and apply acceleration
+    for P in Character.instances:
+        # x direction acceleration
+        P.x_ = P.newX_ + sum(P.x__.values()) * dt - P.xDrag * P.x_ * dt
+        # y direction acceleration
+        P.y_ = P.newY_ + sum(P.y__.values()) * dt - P.yDrag * P.y_ * dt
+        Character.canvas.coords(P.imageID, P.x, P.y)
+
+    if Character.controlled is not None:
         # Sets the position of the screen and text to follow the Character being controlled
         if Character.controlled.x - Character.xScreenPosition > 612 + 10:
             setScreenPositionX(Character.controlled.x - (612 + 10))
@@ -89,14 +100,6 @@ def physicsLoop(dt=30):
                 Character.canvas.coords(PlatformerTextbox.textBox.textShown['arrow'],
                                         730 + adjustX,
                                         610 + adjustY)
-
-    # update coordinates of the picture and apply acceleration
-    for P in Character.instances:
-        # x direction acceleration
-        P.x_ += sum(P.x__.values()) * dt - P.xDrag * P.x_ * dt
-        # y direction acceleration
-        P.y_ += sum(P.y__.values()) * dt - P.yDrag * P.y_ * dt
-        Character.canvas.coords(P.imageID, P.x, P.y)
 
 
 def do_overlap(l1, r1, l2, r2):
@@ -162,7 +165,6 @@ def touching_Wall_Left(Object1, leniency=2):
 
 
 def checkCollision(dt):
-    collisionFlag = False
     # start by going through each hash bucket to check for collisions.
     # If a collision happens, run the appropriate collision function
     for val in Character.hashTable.values():
@@ -173,55 +175,52 @@ def checkCollision(dt):
                                   (val[_].x + val[_].image.width(), -val[_].y - val[_].image.height()),
                                   (val[__].x, -val[__].y),
                                   (val[__].x + val[__].image.width(), -val[__].y - val[__].image.height())):
-                        collisionFlag = True
                         netX = val[_].x_ - val[__].x_
                         netY = val[_].y_ - val[__].y_
                         if netX == 0:
                             if netY > 0:
-                                top(val[_], val[__])
+                                top(val[_], val[__], dt)
                             else:
-                                bottom(val[_], val[__])
+                                bottom(val[_], val[__], dt)
                         if netY == 0:
                             if netX > 0:
-                                left(val[_], val[__])
+                                left(val[_], val[__], dt)
                             else:
-                                right(val[_], val[__])
+                                right(val[_], val[__], dt)
                         elif netX > 0 and netY > 0:
                             if (val[__].x - val[_].x - val[_].image.width()) / netX <= (
                                     val[__].y - val[_].y - val[_].image.height()) / netY:
-                                top(val[_], val[__])
+                                top(val[_], val[__], dt)
                             if (val[__].x - val[_].x - val[_].image.width()) / netX >= (
                                     val[__].y - val[_].y - val[_].image.height()) / netY:
-                                left(val[_], val[__])
+                                left(val[_], val[__], dt)
                         elif netX > 0 and netY < 0:
                             if (val[__].x - val[_].x - val[_].image.width()) / netX <= (
                                     val[__].y + val[__].image.height() - val[_].y) / netY:
-                                bottom(val[_], val[__])
+                                bottom(val[_], val[__], dt)
                             if (val[__].x - val[_].x - val[_].image.width()) / netX >= (
                                     val[__].y + val[__].image.height() - val[_].y) / netY:
-                                left(val[_], val[__])
+                                left(val[_], val[__], dt)
                         elif netX < 0 and netY > 0:
                             if (val[__].x + val[__].image.width() - val[_].x) / netX <= (
                                     val[__].y - val[_].y - val[_].image.height()) / netY:
-                                top(val[_], val[__])
+                                top(val[_], val[__], dt)
                             if (val[__].x + val[__].image.width() - val[_].x) / netX >= (
                                     val[__].y - val[_].y - val[_].image.height()) / netY:
-                                right(val[_], val[__])
+                                right(val[_], val[__], dt)
                         elif netX < 0 and netY < 0:
                             if (val[__].x + val[__].image.width() - val[_].x) / netX <= (
                                     val[__].y + val[__].image.height() - val[_].y) / netY:
-                                bottom(val[_], val[__])
+                                bottom(val[_], val[__], dt)
                             if (val[__].x + val[__].image.width() - val[_].x) / netX >= (
                                     val[__].y + val[__].image.height() - val[_].y) / netY:
-                                right(val[_], val[__])
+                                right(val[_], val[__], dt)
 
     newHash = {}
     for P in Character.instances:
         # Apply changes from the collision function
         P.x = P.newX
         P.y = P.newY
-        P.x_ = P.newX_
-        P.y_ = P.newY_
         # update the Spacial Hash Table
         for _ in range(int(P.x // 64) - 1, int(P.x + P.image.width()) // 64):
             for __ in range(int(P.y // 64) - 1, int(P.y + P.image.height()) // 64):
@@ -230,13 +229,9 @@ def checkCollision(dt):
                 newHash[(_, __)].append(P)
     Character.hashTable = newHash
 
-    # if a collision happened check for more collisions until no more collisions occur
-    if collisionFlag:
-        checkCollision(dt)
-
 
 # collision functions
-def top(A, B):
+def top(A, B, dt):
     if not A.dynamic:
         B.newY = A.y + A.image.height() + 0.001
         B.newY_ = -A.yElastic * B.yElastic * B.y_
@@ -251,7 +246,7 @@ def top(A, B):
                     Character.canvas.itemconfig(Character.controlled.imageID, image=Character.controlled.image)
                 elif Character.fastFall is False:
                     Character.fastFall = None
-    if not B.dynamic:
+    elif not B.dynamic:
         A.newY = B.y - A.image.height() - 0.001
         A.newY_ = -A.yElastic * B.yElastic * A.y_
         if Character.controlled == A:
@@ -268,53 +263,59 @@ def top(A, B):
                     Character.fastFall = None
 
 
-def bottom(A, B):
+def bottom(A, B, dt):
+    A.newY = A.y - A.y_ + A.y_ * (A.y - A.y_ - B.y - B.image.height() + B.y_) / (B.y_ - A.y_) - A.y_ * 0.0001
+    B.newY = B.y - B.y_ + B.y_ * (A.y - A.y_ - B.y - B.image.height() + B.y_) / (B.y_ - A.y_) - B.y_ * 0.0001
     if not A.dynamic:
-        B.newY = A.y - B.image.height() - 0.001
         B.newY_ = -A.yElastic * B.yElastic * B.y_
-        if Character.controlled == B:
-            Character.controlled.y__['gravity'] = 0.002
-            keyUnlock('Right')
-            keyUnlock('Left')
-            if on_Ground(Character.controlled):
-                if B.newY_ == 0:
-                    Character.fastFall = True
-                    Character.doubleJump = True
-                    Character.canvas.itemconfig(Character.controlled.imageID, image=Character.controlled.image)
-                elif Character.fastFall is False:
-                    Character.fastFall = None
-    if not B.dynamic:
-        A.newY = B.y + B.image.height() + 0.001
+        B.y_ = (B.y + B.y_ - B.newY) / dt
+    elif not B.dynamic:
         A.newY_ = -A.yElastic * B.yElastic * A.y_
-        if Character.controlled == A:
-            Character.controlled.y__['gravity'] = 0.002
-            keyUnlock('Right')
-            keyUnlock('Left')
-            if on_Ground(Character.controlled):
-                if A.newY_ == 0:
-                    Character.fastFall = True
-                    Character.doubleJump = True
-                    Character.canvas.itemconfig(Character.controlled.imageID, image=Character.controlled.image)
-                elif Character.fastFall is False:
-                    Character.fastFall = None
+        A.y_ = (A.y + A.y_ - A.newY) / dt
+    else:
+        print('but')
+        B.y_ = (B.y - B.y_ - B.newY) / dt
+        A.y_ = (A.y - A.y_ - A.newY) / dt
+        A.newY_ = 0
+        B.newY_ = 0
+
+    if A == Character.controlled or B == Character.controlled:
+        Character.controlled.y__['gravity'] = 0.002
+        keyUnlock('Right')
+        keyUnlock('Left')
+        if on_Ground(Character.controlled):
+            if Character.controlled.newY_ == 0:
+                Character.fastFall = True
+                Character.doubleJump = True
+                Character.canvas.itemconfig(Character.controlled.imageID, image=Character.controlled.image)
+            elif Character.fastFall is False:
+                Character.fastFall = None
 
 
-def left(A, B):
+def left(A, B, dt):
+    print('left')
+    A.newX = A.x - A.x_ + A.x_ * (A.x + A.image.width() - A.x_ - B.x + B.x_) / (B.x_ - A.x_) - A.x_ * 0.0001
+    B.newX = B.x - B.x_ + B.x_ * (A.x + A.image.width() - A.x_ - B.x + B.x_) / (B.x_ - A.x_) - B.x_ * 0.0001
     if not A.dynamic:
-        B.newX = A.x + A.image.width() + 0.001
-        B.newX_ = -A.xElastic * B.xElastic * B.x_
-    if not B.dynamic:
-        A.newX = B.x - A.image.width() - 0.001
-        A.newX_ = -A.xElastic * B.xElastic * A.x_
+        B.newX_ = 0
+    elif not B.dynamic:
+        A.newX_ = 0
+    else:
+        A.newX_ = 0
+        B.newX_ = 0
 
 
-def right(A, B):
+def right(A, B, dt):
+    print('right')
+    A.newX = A.x - A.x_ + A.x_ * (A.x - A.x_ - B.x - B.image.width() + B.x_) / (B.x_ - A.x_) - A.x_ * 0.0001
+    B.newX = B.x - B.x_ + B.x_ * (A.x - A.x_ - B.x - B.image.width() + B.x_) / (B.x_ - A.x_) - B.x_ * 0.0001
     if not A.dynamic:
-        B.newX = A.x - B.image.width() - 0.001
-        B.newX_ = -A.xElastic * B.xElastic * B.x_
-    if not B.dynamic:
-        A.newX = B.x + B.image.width() + 0.001
-        A.newX_ = -A.xElastic * B.xElastic * A.x_
+        B.newX_ = 0
+    elif not B.dynamic:
+        A.newX_ = 0
+    else:
+        A.newX_ = 0
+        B.newX_ = 0
 
 
 def gainControl(chara):
@@ -538,9 +539,10 @@ def openingScene():
     Character('WhiteWall.png', dynamic=False).spawnChar(-64, height / 2 - 1024.01 + 63)
     Character('WhiteWall.png', dynamic=False).spawnChar(width, height / 2 - 1024.01 + 63)
     Character('WhiteFloor.png', dynamic=False).spawnChar(width + 0.1, height / 2 + 63.01)
+    Character('WhiteBoxDot.png', dynamic=False).spawnChar(width / 2 + 200, height / 2 - 64)
     You = Character('BlueBoxDot.png')
     You.y__['gravity'] = 0.002
-    You.spawnChar(0, -64)
+    You.spawnChar(130, -64)
 
     You = Character(pic='BlueBox.png', pic2='WhiteBox.png')
     You.y__['gravity'] = 0.002
@@ -565,9 +567,6 @@ def openingScene():
 
 def tutorial():
     clearWindow()
-    You = Character('WhiteWall.png', dynamic=False)
-    You.spawnChar(600 + 1000, 460)
-
     You = Character('WhiteWall.png', dynamic=False)
     You.spawnChar(600 + 1000, 460)
 
