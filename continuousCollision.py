@@ -9,15 +9,12 @@ def physicsLoop(dt=30):
     # Queue the next frame
     Character.nextFrame = Character.root.after(dt, physicsLoop)
     newHash = {}
-    print('start')
     for P in Character.instances:
         # update the Spacial Hash Table
         for _ in rectangleTraversal(P, 64, dt):
             if _ not in newHash:
                 newHash[_] = {}
             newHash[_][P] = True
-    print(len(newHash.keys()))
-    print('oh its ova')
     Character.hashTable = newHash
 
     # Check for collisions and apply reactions
