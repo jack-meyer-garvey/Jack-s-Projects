@@ -5,13 +5,15 @@ import pygame
 from time import time
 
 
-def physicsLoop(dt=30):
+def physicsLoop(dt=20):
+    start = time()
+    grid = Character.xLevelSize / len(Character.instances)
     # Queue the next frame
     Character.nextFrame = Character.root.after(dt, physicsLoop)
     newHash = {}
     for P in Character.instances:
         # update the Spacial Hash Table
-        for _ in rectangleTraversal(P, 64, dt):
+        for _ in rectangleTraversal(P, grid, dt):
             if _ not in newHash:
                 newHash[_] = {}
             newHash[_][P] = True
@@ -36,20 +38,22 @@ def physicsLoop(dt=30):
                         collisionPears.append(pear)
                         if timeC != 1:
                             if timeC not in Character.collisions:
-                                Character.collisions[timeC] = []
-                            Character.collisions[timeC].append((val[_], val[__]))
-
+                                Character.collisions[timeC] = {}
+                            Character.collisions[timeC][(val[_].index, val[__].index)] = True
     timeElapsed = 0
     tP = 0
-    timeQueue = sorted(Character.collisions)
+    timeQueue = sorted(Character.collisions.keys())
     while tP < len(timeQueue):
         for P in Character.instances:
             P.x += P.x_ * dt * (timeQueue[tP] - timeElapsed)
             P.y += P.y_ * dt * (timeQueue[tP] - timeElapsed)
-        for A, B in Character.collisions[timeQueue[tP]]:
+        pairQueue = list(Character.collisions[timeQueue[tP]].keys())
+        for A, B in pairQueue:
+            A = Character.instances[A]
+            B = Character.instances[B]
             tim, normX, normY = SweptAABB(A.x, A.y, A.x_, A.y_, A.image.width(), A.image.height(),
                                           B.x, B.y, B.x_, B.y_, B.image.width(), B.image.height(), 1 - timeQueue[tP])
-            if tim != 1:
+            if not tim:
                 if A.dynamic != B.dynamic:
                     if normX:
                         A.x_ = 0
@@ -57,12 +61,48 @@ def physicsLoop(dt=30):
                     else:
                         A.y_ = 0
                         B.y_ = 0
-
+                else:
+                    if normX:
+                        newA = ((A.mass - B.mass) * A.x_ + (2 * B.mass) * B.x_) / (A.mass + B.mass)
+                        newB = ((2 * A.mass) * A.x_ - (A.mass - B.mass) * B.x_) / (A.mass + B.mass)
+                        A.x_ = newA
+                        B.y_ = newB
+                    else:
+                        newA = ((A.mass - B.mass) * A.y_ + (2 * B.mass) * B.y_) / (A.mass + B.mass)
+                        newB = ((2 * A.mass) * A.y_ - (A.mass - B.mass) * B.y_) / (A.mass + B.mass)
+                        A.y_ = newA
+                        B.y_ = newB
+                collisionPears = set()
+                for C in [A, B]:
+                    for _ in rectangleTraversal(C, grid, dt * (1 - timeQueue[tP])):
+                        if _ in Character.hashTable:
+                            for D in Character.hashTable[_]:
+                                if (C.index, D.index) not in collisionPears:
+                                    collisionPears.add((C.index, D.index))
+                                    timeC, normX, normY = SweptAABB(C.x, C.y, C.x_, C.y_,
+                                                                    C.image.width(),
+                                                                    C.image.height(),
+                                                                    D.x, D.y, D.x_, D.y_,
+                                                                    D.image.width(), D.image.height(),
+                                                                    dt * (1 - timeQueue[tP]))
+                                    if timeC != 1:
+                                        timeC = timeQueue[tP] + (1 - timeQueue[tP]) * timeC
+                                        if timeC not in Character.collisions:
+                                            Character.collisions[timeC] = {}
+                                        Character.collisions[timeC][(C.index, D.index)] = True
+                                        if timeC not in timeQueue:
+                                            timeQueue.append(timeC)
+                                        elif timeC == timeQueue[tP]:
+                                            pairQueue.append((C.index, D.index))
+                        else:
+                            Character.hashTable[_] = {}
+                        Character.hashTable[_][A] = True
+        timeQueue = sorted(timeQueue)
         timeElapsed = timeQueue[tP]
         tP += 1
 
     Character.collisions.clear()
-    Character.collisions[1] = []
+    Character.collisions[1] = {}
 
     # update coordinates of the picture and apply acceleration
     for P in Character.instances:
@@ -100,7 +140,10 @@ def physicsLoop(dt=30):
                 Character.canvas.coords(PlatformerTextbox.textBox.textShown['arrow'],
                                         730 + adjustX,
                                         610 + adjustY)
-
+    end = time()
+    total = 1000*(end-start)
+    if total > 20:
+        print(total)
 
 def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, height2, dt):
     """see https://www.gamedev.net/tutorials/_/technical/game-programming/swept-aabb-collision-detection-and-response-r3084/"""
@@ -119,12 +162,18 @@ def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, heigh
         yInvEntry = (y2 + height2) - y1
         yInvExit = y2 - (y1 + height1)
     if vx == 0:
+        # account for case without x alignment
+        if x1 >= x2 + width2 or x2 >= x1 + width1:
+            return 1, 0, 0
         xEntry = float('-inf')
         xExit = float('inf')
     else:
         xEntry = xInvEntry / vx
         xExit = xInvExit / vx
     if vy == 0:
+        # account for case without y alignment
+        if y1 >= y2 + height2 or y2 >= y1 + height1:
+            return 1, 0, 0
         yEntry = float('-inf')
         yExit = float('inf')
     else:
@@ -315,7 +364,7 @@ class Character:
     instances = []
     nextFrame = None
     hashTable = {}
-    collisions = {1: []}
+    collisions = {1: {}}
     controlled = None
     keys = {'Left': False, 'Right': False, 'Down': False}
     lockedKeys = {'Left': False, 'Right': False, 'Down': False, 'Up': False, 'space': False}
@@ -347,10 +396,9 @@ class Character:
             self.image2 = PhotoImage(file=pic2)
         self.dynamic = dynamic
         self.mass = 1
-        self.collisions = {}
 
         Character.instances.append(self)
-        self.index = len(Character.instances)
+        self.index = len(Character.instances) - 1
 
     def spawnChar(self, x, y):
         """Draws character and saves them to the hash table"""
@@ -429,15 +477,19 @@ def startOpeningScene():
 def openingScene():
     clearWindow()
     Character('WhiteFloor.png', dynamic=False).spawnChar(0, height / 2 + 63.01)
-    Character('WhiteFloor.png', dynamic=False).spawnChar(width / 2 + 60, height / 2 + 64)
+    Character('WhiteFloor.png', dynamic=False).spawnChar(width / 2 + 60, height / 2 + 63.01)
     You = Character('BlueBoxDot.png')
     You.y__['gravity'] = 0.002
-    You.spawnChar(400.1, -64)
+    gainControl(You)
+    You.spawnChar(400.1, -64.1)
+    You = Character('BlueBoxDot.png')
+    You.y__['gravity'] = 0.002
+    gainControl(You)
+    You.spawnChar(400.1, -500.1)
 
     You = Character(pic='BlueBox.png', pic2='WhiteBox.png')
     You.y__['gravity'] = 0.002
     You.x_ = 0.05
-    gainControl(You)
     You.spawnChar(400.1, height / 2 - 10)
     setLevelSize(width, height)
     physicsLoop()
