@@ -13,7 +13,7 @@ def physicsLoop(dt=20):
     newHash = {}
     for P in Character.instances:
         # update the Spacial Hash Table
-        for _ in rectangleTraversal(P, grid, dt):
+        for _ in P.rectangleTraversal(grid, dt):
             if _ not in newHash:
                 newHash[_] = {}
             newHash[_][P] = True
@@ -74,7 +74,7 @@ def physicsLoop(dt=20):
                         B.y_ = newB
                 collisionPears = set()
                 for C in [A, B]:
-                    for _ in rectangleTraversal(C, grid, dt * (1 - timeQueue[tP])):
+                    for _ in C.rectangleTraversal(grid, dt * (1 - timeQueue[tP])):
                         if _ in Character.hashTable:
                             for D in Character.hashTable[_]:
                                 if (C.index, D.index) not in collisionPears:
@@ -207,138 +207,6 @@ def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, heigh
         return entryTime, normalX, normalY
 
 
-def rectangleTraversal(hoi, grid, dt):
-    """ see http://www.cse.yorku.ca/~amana/research/grid.pdf """
-    vox = set()
-
-    def mini(xAdj=0, yAdj=0):
-        voxels = set()
-        xPos = hoi.x + xAdj
-        yPos = hoi.y + yAdj
-        if hoi.x_ == 0 and hoi.y_ == 0:
-            voxels.add((xPos // grid, yPos // grid))
-        elif hoi.x_ == 0:
-            voxels = voxels.union({(xPos // grid, y) for y in np.arange(min(yPos // grid, (yPos + hoi.y_ * dt) // grid),
-                                                                        max(yPos // grid,
-                                                                            (yPos + hoi.y_ * dt) // grid) + 1)})
-        elif hoi.y_ == 0:
-            voxels = voxels.union({(x, yPos // grid) for x in np.arange(min(xPos // grid, (xPos + hoi.x_ * dt) // grid),
-                                                                        max(xPos // grid,
-                                                                            (xPos + hoi.x_ * dt) // grid) + 1)})
-        # Initialization
-        else:
-            xUnit = xPos // grid
-            yUnit = yPos // grid
-            stepX = np.sign(hoi.x_)
-            stepY = np.sign(hoi.y_)
-            xMax = (xPos + hoi.x_ * dt) // grid
-            yMax = (yPos + hoi.y_ * dt) // grid
-            tMaxX = (grid * (xUnit + (stepX > 0)) - xPos) / (hoi.x_ * dt)
-            tMaxY = (grid * (yUnit + (stepY > 0)) - yPos) / (hoi.y_ * dt)
-            tDeltaX = grid / abs(hoi.x_ * dt)
-            tDeltaY = grid / abs(hoi.y_ * dt)
-            voxels.add((xUnit, yUnit))
-            # incremental traversal
-            while xUnit != xMax or yUnit != yMax:
-                if tMaxX < tMaxY:
-                    tMaxX = tMaxX + tDeltaX
-                    xUnit = xUnit + stepX
-                else:
-                    tMaxY = tMaxY + tDeltaY
-                    yUnit = yUnit + stepY
-                voxels.add((xUnit, yUnit))
-        return voxels
-
-    if np.sign(hoi.x_) == 1 and np.sign(hoi.y_) == -1:
-        vox = vox.union(mini())
-        vox = vox.union(mini(hoi.image.width(), hoi.image.height()))
-        for i in np.arange(hoi.x // grid, (hoi.x + hoi.image.width()) // grid + 1):
-            vox.add((i, (hoi.y + hoi.image.height()) // grid))
-        for j in np.arange(hoi.y // grid, (hoi.y + hoi.image.height()) // grid + 1):
-            vox.add((hoi.x // grid, j))
-        for i in np.arange((hoi.x + hoi.x_ * dt) // grid, (hoi.x + hoi.x_ * dt + hoi.image.width()) // grid + 1):
-            vox.add((i, (hoi.y + hoi.y_ * dt) // grid))
-        for j in np.arange((hoi.y + hoi.y_ * dt) // grid, (hoi.y + hoi.y_ * dt + hoi.image.height()) // grid + 1):
-            vox.add(((hoi.x + hoi.image.width() + hoi.x_ * dt) // grid, j))
-    elif np.sign(hoi.x_) == -1 and np.sign(hoi.y_) == 1:
-        vox = vox.union(mini())
-        vox = vox.union(mini(hoi.image.width(), hoi.image.height()))
-        for i in np.arange(hoi.x // grid, (hoi.x + hoi.image.width()) // grid + 1):
-            vox.add((i, hoi.y // grid))
-        for j in np.arange(hoi.y // grid, (hoi.y + hoi.image.height()) // grid + 1):
-            vox.add(((hoi.x + hoi.image.width()) // grid, j))
-        for i in np.arange((hoi.x + hoi.x_ * dt) // grid, (hoi.x + hoi.x_ * dt + hoi.image.width()) // grid + 1):
-            vox.add((i, (hoi.y + hoi.image.height() + hoi.y_ * dt) // grid))
-        for j in np.arange((hoi.y + hoi.y_ * dt) // grid, (hoi.y + hoi.y_ * dt + hoi.image.height()) // grid + 1):
-            vox.add(((hoi.x + hoi.x_ * dt) // grid, j))
-    elif np.sign(hoi.x_) == 1 and np.sign(hoi.y_) == 1:
-        vox = vox.union(mini(hoi.image.width(), 0))
-        vox = vox.union(mini(0, hoi.image.height()))
-        for i in np.arange(hoi.x // grid, (hoi.x + hoi.image.width()) // grid + 1):
-            vox.add((i, hoi.y // grid))
-        for j in np.arange(hoi.y // grid, (hoi.y + hoi.image.height()) // grid + 1):
-            vox.add((hoi.x // grid, j))
-        for i in np.arange((hoi.x + hoi.x_ * dt) // grid, (hoi.x + hoi.x_ * dt + hoi.image.width()) // grid + 1):
-            vox.add((i, (hoi.y + hoi.image.height() + hoi.y_ * dt) // grid))
-        for j in np.arange((hoi.y + hoi.y_ * dt) // grid, (hoi.y + hoi.y_ * dt + hoi.image.height()) // grid + 1):
-            vox.add(((hoi.x + hoi.x_ * dt + hoi.image.width()) // grid, j))
-    elif np.sign(hoi.x_) == -1 and np.sign(hoi.y_) == -1:
-        vox = vox.union(mini(hoi.image.width(), 0))
-        vox = vox.union(mini(0, hoi.image.height()))
-        for i in np.arange(hoi.x // grid, (hoi.x + hoi.image.width()) // grid + 1):
-            vox.add((i, (hoi.y + hoi.image.height()) // grid))
-        for j in np.arange(hoi.y // grid, (hoi.y + hoi.image.height()) // grid + 1):
-            vox.add(((hoi.x + hoi.image.width()) // grid, j))
-        for i in np.arange((hoi.x + hoi.x_ * dt) // grid, (hoi.x + hoi.x_ * dt + hoi.image.width()) // grid + 1):
-            vox.add((i, (hoi.y + hoi.y_ * dt) // grid))
-        for j in np.arange((hoi.y + hoi.y_ * dt) // grid, (hoi.y + hoi.y_ * dt + hoi.image.height()) // grid + 1):
-            vox.add(((hoi.x + hoi.x_ * dt) // grid, j))
-    elif np.sign(hoi.x_) == 0 and np.sign(hoi.y_) == 1:
-        for i in np.arange(hoi.x // grid, (hoi.x + hoi.image.width() + hoi.x_ * dt) // grid + 1):
-            vox.add((i, (hoi.y + hoi.image.height() + hoi.y_ * dt) // grid))
-            vox.add((i, hoi.y // grid))
-        for j in np.arange(hoi.y // grid, (hoi.y + hoi.image.height() + hoi.y_ * dt) // grid + 1):
-            vox.add(((hoi.x + hoi.image.width()) // grid, j))
-            vox.add((hoi.x // grid, j))
-    elif np.sign(hoi.x_) == 0 and np.sign(hoi.y_) == -1:
-        for i in np.arange(hoi.x // grid, (hoi.x + hoi.image.width()) // grid + 1):
-            vox.add((i, (hoi.y + hoi.y_ * dt) // grid))
-            vox.add((i, (hoi.y + hoi.image.height()) // grid))
-        for j in np.arange((hoi.y + hoi.y_ * dt) // grid, (hoi.y + hoi.image.height()) // grid + 1):
-            vox.add(((hoi.x + hoi.image.width()) // grid, j))
-            vox.add((hoi.x // grid, j))
-    elif np.sign(hoi.x_) == 1 and np.sign(hoi.y_) == 0:
-        for i in np.arange(hoi.x // grid, (hoi.x + hoi.image.width() + hoi.x_ * dt) // grid + 1):
-            vox.add((i, hoi.y // grid))
-            vox.add((i, (hoi.y + hoi.image.height()) // grid))
-        for j in np.arange(hoi.y // grid, (hoi.y + hoi.image.height()) // grid + 1):
-            vox.add(((hoi.x + hoi.image.width() + hoi.x_ * dt) // grid, j))
-            vox.add((hoi.x // grid, j))
-    else:
-        for i in np.arange((hoi.x + hoi.x_ * dt) // grid, (hoi.x + hoi.image.width()) // grid + 1):
-            vox.add((i, hoi.y // grid))
-            vox.add((i, (hoi.y + hoi.image.height()) // grid))
-        for j in np.arange(hoi.y // grid, (hoi.y + hoi.image.height()) // grid + 1):
-            vox.add(((hoi.x + hoi.image.width()) // grid, j))
-            vox.add(((hoi.x + hoi.x_ * dt) // grid, j))
-    return vox
-
-
-def gainControl(chara):
-    Character.controlled = chara
-    Character.canvas.bind("<KeyPress-space>", key_pressed)
-    Character.canvas.bind("<KeyRelease-space>", key_release)
-    Character.canvas.bind("<KeyPress-Up>", key_pressed)
-    Character.canvas.bind("<KeyRelease-Up>", key_release)
-    Character.canvas.bind("<KeyPress-Down>", key_pressed)
-    Character.canvas.bind("<KeyRelease-Down>", key_release)
-    Character.canvas.bind("<KeyPress-Left>", key_pressed)
-    Character.canvas.bind("<KeyRelease-Left>", key_release)
-    Character.canvas.bind("<KeyPress-Right>", key_pressed)
-    Character.canvas.bind("<KeyRelease-Right>", key_release)
-    Character.canvas.focus_set()
-
-
 def key_pressed(event):
     Character.keys[event.keysym] = True
     if not Character.lockedKeys[event.keysym]:
@@ -406,6 +274,138 @@ class Character:
         self.x = x
         self.y = y
         self.imageID = Character.canvas.create_image(x, y, anchor='nw', image=self.image)
+
+    def rectangleTraversal(self, grid, dt):
+        """ see http://www.cse.yorku.ca/~amana/research/grid.pdf """
+        vox = set()
+
+        def mini(xAdj=0, yAdj=0):
+            voxels = set()
+            xPos = self.x + xAdj
+            yPos = self.y + yAdj
+            if self.x_ == 0 and self.y_ == 0:
+                voxels.add((xPos // grid, yPos // grid))
+            elif self.x_ == 0:
+                voxels = voxels.union(
+                    {(xPos // grid, y) for y in np.arange(min(yPos // grid, (yPos + self.y_ * dt) // grid),
+                                                          max(yPos // grid,
+                                                              (yPos + self.y_ * dt) // grid) + 1)})
+            elif self.y_ == 0:
+                voxels = voxels.union(
+                    {(x, yPos // grid) for x in np.arange(min(xPos // grid, (xPos + self.x_ * dt) // grid),
+                                                          max(xPos // grid,
+                                                              (xPos + self.x_ * dt) // grid) + 1)})
+            # Initialization
+            else:
+                xUnit = xPos // grid
+                yUnit = yPos // grid
+                stepX = np.sign(self.x_)
+                stepY = np.sign(self.y_)
+                xMax = (xPos + self.x_ * dt) // grid
+                yMax = (yPos + self.y_ * dt) // grid
+                tMaxX = (grid * (xUnit + (stepX > 0)) - xPos) / (self.x_ * dt)
+                tMaxY = (grid * (yUnit + (stepY > 0)) - yPos) / (self.y_ * dt)
+                tDeltaX = grid / abs(self.x_ * dt)
+                tDeltaY = grid / abs(self.y_ * dt)
+                voxels.add((xUnit, yUnit))
+                # incremental traversal
+                while xUnit != xMax or yUnit != yMax:
+                    if tMaxX < tMaxY:
+                        tMaxX = tMaxX + tDeltaX
+                        xUnit = xUnit + stepX
+                    else:
+                        tMaxY = tMaxY + tDeltaY
+                        yUnit = yUnit + stepY
+                    voxels.add((xUnit, yUnit))
+            return voxels
+
+        if np.sign(self.x_) == 1 and np.sign(self.y_) == -1:
+            vox = vox.union(mini())
+            vox = vox.union(mini(self.image.width(), self.image.height()))
+            for i in np.arange(self.x // grid, (self.x + self.image.width()) // grid + 1):
+                vox.add((i, (self.y + self.image.height()) // grid))
+            for j in np.arange(self.y // grid, (self.y + self.image.height()) // grid + 1):
+                vox.add((self.x // grid, j))
+            for i in np.arange((self.x + self.x_ * dt) // grid, (self.x + self.x_ * dt + self.image.width()) // grid + 1):
+                vox.add((i, (self.y + self.y_ * dt) // grid))
+            for j in np.arange((self.y + self.y_ * dt) // grid, (self.y + self.y_ * dt + self.image.height()) // grid + 1):
+                vox.add(((self.x + self.image.width() + self.x_ * dt) // grid, j))
+        elif np.sign(self.x_) == -1 and np.sign(self.y_) == 1:
+            vox = vox.union(mini())
+            vox = vox.union(mini(self.image.width(), self.image.height()))
+            for i in np.arange(self.x // grid, (self.x + self.image.width()) // grid + 1):
+                vox.add((i, self.y // grid))
+            for j in np.arange(self.y // grid, (self.y + self.image.height()) // grid + 1):
+                vox.add(((self.x + self.image.width()) // grid, j))
+            for i in np.arange((self.x + self.x_ * dt) // grid, (self.x + self.x_ * dt + self.image.width()) // grid + 1):
+                vox.add((i, (self.y + self.image.height() + self.y_ * dt) // grid))
+            for j in np.arange((self.y + self.y_ * dt) // grid, (self.y + self.y_ * dt + self.image.height()) // grid + 1):
+                vox.add(((self.x + self.x_ * dt) // grid, j))
+        elif np.sign(self.x_) == 1 and np.sign(self.y_) == 1:
+            vox = vox.union(mini(self.image.width(), 0))
+            vox = vox.union(mini(0, self.image.height()))
+            for i in np.arange(self.x // grid, (self.x + self.image.width()) // grid + 1):
+                vox.add((i, self.y // grid))
+            for j in np.arange(self.y // grid, (self.y + self.image.height()) // grid + 1):
+                vox.add((self.x // grid, j))
+            for i in np.arange((self.x + self.x_ * dt) // grid, (self.x + self.x_ * dt + self.image.width()) // grid + 1):
+                vox.add((i, (self.y + self.image.height() + self.y_ * dt) // grid))
+            for j in np.arange((self.y + self.y_ * dt) // grid, (self.y + self.y_ * dt + self.image.height()) // grid + 1):
+                vox.add(((self.x + self.x_ * dt + self.image.width()) // grid, j))
+        elif np.sign(self.x_) == -1 and np.sign(self.y_) == -1:
+            vox = vox.union(mini(self.image.width(), 0))
+            vox = vox.union(mini(0, self.image.height()))
+            for i in np.arange(self.x // grid, (self.x + self.image.width()) // grid + 1):
+                vox.add((i, (self.y + self.image.height()) // grid))
+            for j in np.arange(self.y // grid, (self.y + self.image.height()) // grid + 1):
+                vox.add(((self.x + self.image.width()) // grid, j))
+            for i in np.arange((self.x + self.x_ * dt) // grid, (self.x + self.x_ * dt + self.image.width()) // grid + 1):
+                vox.add((i, (self.y + self.y_ * dt) // grid))
+            for j in np.arange((self.y + self.y_ * dt) // grid, (self.y + self.y_ * dt + self.image.height()) // grid + 1):
+                vox.add(((self.x + self.x_ * dt) // grid, j))
+        elif np.sign(self.x_) == 0 and np.sign(self.y_) == 1:
+            for i in np.arange(self.x // grid, (self.x + self.image.width() + self.x_ * dt) // grid + 1):
+                vox.add((i, (self.y + self.image.height() + self.y_ * dt) // grid))
+                vox.add((i, self.y // grid))
+            for j in np.arange(self.y // grid, (self.y + self.image.height() + self.y_ * dt) // grid + 1):
+                vox.add(((self.x + self.image.width()) // grid, j))
+                vox.add((self.x // grid, j))
+        elif np.sign(self.x_) == 0 and np.sign(self.y_) == -1:
+            for i in np.arange(self.x // grid, (self.x + self.image.width()) // grid + 1):
+                vox.add((i, (self.y + self.y_ * dt) // grid))
+                vox.add((i, (self.y + self.image.height()) // grid))
+            for j in np.arange((self.y + self.y_ * dt) // grid, (self.y + self.image.height()) // grid + 1):
+                vox.add(((self.x + self.image.width()) // grid, j))
+                vox.add((self.x // grid, j))
+        elif np.sign(self.x_) == 1 and np.sign(self.y_) == 0:
+            for i in np.arange(self.x // grid, (self.x + self.image.width() + self.x_ * dt) // grid + 1):
+                vox.add((i, self.y // grid))
+                vox.add((i, (self.y + self.image.height()) // grid))
+            for j in np.arange(self.y // grid, (self.y + self.image.height()) // grid + 1):
+                vox.add(((self.x + self.image.width() + self.x_ * dt) // grid, j))
+                vox.add((self.x // grid, j))
+        else:
+            for i in np.arange((self.x + self.x_ * dt) // grid, (self.x + self.image.width()) // grid + 1):
+                vox.add((i, self.y // grid))
+                vox.add((i, (self.y + self.image.height()) // grid))
+            for j in np.arange(self.y // grid, (self.y + self.image.height()) // grid + 1):
+                vox.add(((self.x + self.image.width()) // grid, j))
+                vox.add(((self.x + self.x_ * dt) // grid, j))
+        return vox
+
+    def gainControl(self):
+        Character.controlled = self
+        Character.canvas.bind("<KeyPress-space>", key_pressed)
+        Character.canvas.bind("<KeyRelease-space>", key_release)
+        Character.canvas.bind("<KeyPress-Up>", key_pressed)
+        Character.canvas.bind("<KeyRelease-Up>", key_release)
+        Character.canvas.bind("<KeyPress-Down>", key_pressed)
+        Character.canvas.bind("<KeyRelease-Down>", key_release)
+        Character.canvas.bind("<KeyPress-Left>", key_pressed)
+        Character.canvas.bind("<KeyRelease-Left>", key_release)
+        Character.canvas.bind("<KeyPress-Right>", key_pressed)
+        Character.canvas.bind("<KeyRelease-Right>", key_release)
+        Character.canvas.focus_set()
 
 
 def setLevelSize(xSize, ySize):
@@ -481,17 +481,16 @@ def openingScene():
     Character('WhiteFloor.png', dynamic=False).spawnChar(width / 2 + 60, height / 2 + 63.01)
     You = Character('BlueBoxDot.png')
     You.y__['gravity'] = 0.002
-    gainControl(You)
     You.spawnChar(400.1, -64.1)
     You = Character('BlueBoxDot.png')
     You.y__['gravity'] = 0.002
-    gainControl(You)
+    You.gainControl()
     You.spawnChar(400.1, -500.1)
 
     You = Character(pic='BlueBox.png', pic2='WhiteBox.png')
     You.y__['gravity'] = 0.002
     You.x_ = 0.05
-    You.spawnChar(400.1, height / 2 - 10)
+    You.spawnChar(0, height / 2 - 10)
     setLevelSize(width, height)
     physicsLoop()
 
