@@ -40,6 +40,10 @@ def physicsLoop(dt=20):
                             if timeC not in Character.collisions:
                                 Character.collisions[timeC] = {}
                             Character.collisions[timeC][(val[_].index, val[__].index)] = True
+    # sequentially resolve collisions in the order that they occur
+    # for each pair of colliding objects, check if the collision should still occur
+    # then resolve the collision
+    # finally, check for any new collisions resulting from this resolution
     timeElapsed = 0
     tP = 0
     timeQueue = sorted(Character.collisions.keys())
@@ -270,7 +274,7 @@ class Character:
         self.index = len(Character.instances) - 1
 
     def spawnChar(self, x, y):
-        """Draws character and saves them to the hash table"""
+        """Draws character in given position"""
         self.x = x
         self.y = y
         self.imageID = Character.canvas.create_image(x, y, anchor='nw', image=self.image)
@@ -394,6 +398,7 @@ class Character:
         return vox
 
     def gainControl(self):
+        """Binds the character controls and marks the given Character as being controlled"""
         Character.controlled = self
         Character.canvas.bind("<KeyPress-space>", key_pressed)
         Character.canvas.bind("<KeyRelease-space>", key_release)
@@ -478,8 +483,8 @@ def startOpeningScene():
 def openingScene():
     clearWindow()
     Character('WhiteFloor.png', dynamic=False).spawnChar(0, height / 2 + 63.01)
-    Character('WhiteFloor.png', dynamic=False).spawnChar(width / 2 + 60, height / 2 + 63.01)
     You = Character('BlueBoxDot.png')
+    You.mass = 2
     You.y__['gravity'] = 0.002
     You.spawnChar(400.1, -64.1)
     You = Character('BlueBoxDot.png')
