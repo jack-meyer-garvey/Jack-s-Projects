@@ -141,9 +141,10 @@ def physicsLoop(dt=20):
                                         730 + adjustX,
                                         610 + adjustY)
     end = time()
-    total = 1000*(end-start)
+    total = 1000 * (end - start)
     if total > 20:
         print(total)
+
 
 def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, height2, dt):
     """see https://www.gamedev.net/tutorials/_/technical/game-programming/swept-aabb-collision-detection-and-response-r3084/"""
