@@ -1,17 +1,35 @@
 from tkinter import *
 import PlatformerTextbox
 import numpy as np
-import pygame
 from time import time
+import collections
+from fractions import Fraction
 
 
-def physicsLoop(dt=20):
+def physicsLoop(dt=Fraction(20)):
     start = time()
-    grid = Character.xLevelSize / len(Character.instances)
+    Character.oncePerFrame.clear()
     # Queue the next frame
     Character.nextFrame = Character.root.after(dt, physicsLoop)
+    if Character.controlled is not None:
+        # If B is being pressed, rewind
+        if Character.keys['c']:
+            rewind()
+            return
+        if Character.keys['Left'] and not Character.keys['Right']:
+            Character.controlled.move(-1)
+        elif Character.keys['Right'] and not Character.keys['Left']:
+            Character.controlled.move(1)
+
+    # Set the spacial hashtable grid size
+    grid = Character.xLevelSize // dt
     newHash = {}
     for P in Character.instances:
+        # Save the previous frame for rewind
+        P.xPath.append(P.x)
+        P.yPath.append(P.y)
+        P.x_Path.append(P.x_)
+        P.y_Path.append(P.y_)
         # update the Spacial Hash Table
         for _ in P.rectangleTraversal(grid, dt):
             if _ not in newHash:
@@ -30,13 +48,14 @@ def physicsLoop(dt=20):
                 for __ in range(_ + 1, len(val)):
                     pear = (val[_].index, val[__].index)
                     if pear not in collisionPears:
-                        timeC, normX, normY = SweptAABB(val[_].x, val[_].y, val[_].x_, val[_].y_, val[_].image.width(),
-                                                        val[_].image.height(),
-                                                        val[__].x, val[__].y, val[__].x_, val[__].y_,
-                                                        val[__].image.width(), val[__].image.height(),
-                                                        dt)
+                        truth, normX, normY, timeC = SweptAABB(val[_].x, val[_].y, val[_].x_, val[_].y_,
+                                                               val[_].image.width(),
+                                                               val[_].image.height(),
+                                                               val[__].x, val[__].y, val[__].x_, val[__].y_,
+                                                               val[__].image.width(), val[__].image.height(),
+                                                               dt)
                         collisionPears.append(pear)
-                        if timeC != 1:
+                        if not truth:
                             if timeC not in Character.collisions:
                                 Character.collisions[timeC] = {}
                             Character.collisions[timeC][(val[_].index, val[__].index)] = True
@@ -55,9 +74,10 @@ def physicsLoop(dt=20):
         for A, B in pairQueue:
             A = Character.instances[A]
             B = Character.instances[B]
-            tim, normX, normY = SweptAABB(A.x, A.y, A.x_, A.y_, A.image.width(), A.image.height(),
-                                          B.x, B.y, B.x_, B.y_, B.image.width(), B.image.height(), 1 - timeQueue[tP])
-            if not tim:
+            truth, normX, normY, tim = SweptAABB(A.x, A.y, A.x_, A.y_, A.image.width(), A.image.height(),
+                                                 B.x, B.y, B.x_, B.y_, B.image.width(), B.image.height(),
+                                                 1 - timeQueue[tP])
+            if not truth:
                 if A.dynamic != B.dynamic:
                     if normX:
                         A.x_ = 0
@@ -67,15 +87,9 @@ def physicsLoop(dt=20):
                         B.y_ = 0
                 else:
                     if normX:
-                        newA = ((A.mass - B.mass) * A.x_ + (2 * B.mass) * B.x_) / (A.mass + B.mass)
-                        newB = ((2 * A.mass) * A.x_ - (A.mass - B.mass) * B.x_) / (A.mass + B.mass)
-                        A.x_ = newA
-                        B.y_ = newB
+                        A.x_, B.x_ = B.x_, A.x_
                     else:
-                        newA = ((A.mass - B.mass) * A.y_ + (2 * B.mass) * B.y_) / (A.mass + B.mass)
-                        newB = ((2 * A.mass) * A.y_ - (A.mass - B.mass) * B.y_) / (A.mass + B.mass)
-                        A.y_ = newA
-                        B.y_ = newB
+                        A.y_, B.y_ = B.y_, A.y_
                 collisionPears = set()
                 for C in [A, B]:
                     for _ in C.rectangleTraversal(grid, dt * (1 - timeQueue[tP])):
@@ -83,13 +97,13 @@ def physicsLoop(dt=20):
                             for D in Character.hashTable[_]:
                                 if (C.index, D.index) not in collisionPears:
                                     collisionPears.add((C.index, D.index))
-                                    timeC, normX, normY = SweptAABB(C.x, C.y, C.x_, C.y_,
-                                                                    C.image.width(),
-                                                                    C.image.height(),
-                                                                    D.x, D.y, D.x_, D.y_,
-                                                                    D.image.width(), D.image.height(),
-                                                                    dt * (1 - timeQueue[tP]))
-                                    if timeC != 1:
+                                    truth, normX, normY, timeC = SweptAABB(C.x, C.y, C.x_, C.y_,
+                                                                           C.image.width(),
+                                                                           C.image.height(),
+                                                                           D.x, D.y, D.x_, D.y_,
+                                                                           D.image.width(), D.image.height(),
+                                                                           dt * (1 - timeQueue[tP]))
+                                    if not truth:
                                         timeC = timeQueue[tP] + (1 - timeQueue[tP]) * timeC
                                         if timeC not in Character.collisions:
                                             Character.collisions[timeC] = {}
@@ -115,12 +129,21 @@ def physicsLoop(dt=20):
         # y direction acceleration
         P.y_ = P.y_ + sum(P.y__.values()) * dt - P.yDrag * P.y_ * dt
 
-        Character.canvas.coords(P.imageID, P.x, P.y)
+        Character.canvas.coords(P.imageID, float(P.x), float(P.y))
 
+    centerScreen()
+
+    end = time()
+    total = 1000 * (end - start)
+    if total > 20:
+        print(total)
+
+
+def centerScreen():
     if Character.controlled is not None:
         # Sets the position of the screen and text to follow the Character being controlled
-        setScreenPositionX(Character.controlled.x - Character.screenAdjustX)
-        setScreenPositionY(Character.controlled.y - Character.screenAdjustY)
+        setScreenPositionX(float(Character.controlled.x) - Character.screenAdjustX)
+        setScreenPositionY(float(Character.controlled.y) - Character.screenAdjustY)
         adjustX = PlatformerTextbox.textBox.xScreenPosition
         adjustY = PlatformerTextbox.textBox.yScreenPosition
         if len(PlatformerTextbox.textBox.imagesShown) != 0:
@@ -144,10 +167,6 @@ def physicsLoop(dt=20):
                 Character.canvas.coords(PlatformerTextbox.textBox.textShown['arrow'],
                                         730 + adjustX,
                                         610 + adjustY)
-    end = time()
-    total = 1000 * (end - start)
-    if total > 20:
-        print(total)
 
 
 def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, height2, dt):
@@ -167,18 +186,16 @@ def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, heigh
         yInvEntry = (y2 + height2) - y1
         yInvExit = y2 - (y1 + height1)
     if vx == 0:
-        # account for case without x alignment
         if x1 >= x2 + width2 or x2 >= x1 + width1:
-            return 1, 0, 0
+            return 1, 0, 0, 1
         xEntry = float('-inf')
         xExit = float('inf')
     else:
         xEntry = xInvEntry / vx
         xExit = xInvExit / vx
     if vy == 0:
-        # account for case without y alignment
         if y1 >= y2 + height2 or y2 >= y1 + height1:
-            return 1, 0, 0
+            return 1, 0, 0, 1
         yEntry = float('-inf')
         yExit = float('inf')
     else:
@@ -187,10 +204,10 @@ def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, heigh
     entryTime = max(xEntry, yEntry)
     exitTime = min(xExit, yExit)
     # If there was no collision
-    if entryTime > exitTime or (xEntry < 0 and yEntry < 0) or xEntry > 1 or yEntry > 1:
+    if entryTime > exitTime or xEntry > 1 or yEntry > 1:
         normalX = 0
         normalY = 0
-        return 1, normalX, normalY
+        return 1, normalX, normalY, 1
     # If there was a collision
     else:
         # calculate normal of collided surface
@@ -208,27 +225,31 @@ def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, heigh
             else:
                 normalX = 0
                 normalY = -1
-        return entryTime, normalX, normalY
+        if xEntry < 0 and yEntry < 0:
+            return 1, normalX, normalY, entryTime
+
+        return 0, normalX, normalY, entryTime
 
 
 def key_pressed(event):
     Character.keys[event.keysym] = True
-    if not Character.lockedKeys[event.keysym]:
-        pass
-
-
-def keyLock(key):
-    Character.lockedKeys[key] = True
-
-
-def keyUnlock(key):
-    Character.lockedKeys[key] = False
 
 
 def key_release(event):
     Character.keys[event.keysym] = False
-    if not Character.lockedKeys[event.keysym]:
-        pass
+
+
+def rewind():
+    for P in Character.instances:
+        if len(P.xPath) != 0:
+            P.x = P.xPath.pop()
+            P.y = P.yPath.pop()
+            P.x_ = P.x_Path.pop()
+            P.y_ = P.y_Path.pop()
+
+            Character.canvas.coords(P.imageID, float(P.x), float(P.y))
+
+            centerScreen()
 
 
 class Character:
@@ -239,8 +260,8 @@ class Character:
     hashTable = {}
     collisions = {1: {}}
     controlled = None
-    keys = {'Left': False, 'Right': False, 'Down': False}
-    lockedKeys = {'Left': False, 'Right': False, 'Down': False, 'Up': False, 'space': False}
+    keys = {'c': False, 'Left': False, 'Right': False}
+    oncePerFrame = set()
     screenAdjustX = 450
     screenAdjustY = 450
 
@@ -248,6 +269,7 @@ class Character:
 
     xLevelSize = 1024
     yLevelSize = 768
+
     xScreenPosition = 0
     yScreenPosition = 0
 
@@ -273,10 +295,15 @@ class Character:
         Character.instances.append(self)
         self.index = len(Character.instances) - 1
 
+        self.xPath = collections.deque(maxlen=3000)
+        self.yPath = collections.deque(maxlen=3000)
+        self.x_Path = collections.deque(maxlen=3000)
+        self.y_Path = collections.deque(maxlen=3000)
+
     def spawnChar(self, x, y):
         """Draws character in given position"""
-        self.x = x
-        self.y = y
+        self.x = Fraction(x)
+        self.y = Fraction(y)
         self.imageID = Character.canvas.create_image(x, y, anchor='nw', image=self.image)
 
     def rectangleTraversal(self, grid, dt):
@@ -330,9 +357,11 @@ class Character:
                 vox.add((i, (self.y + self.image.height()) // grid))
             for j in np.arange(self.y // grid, (self.y + self.image.height()) // grid + 1):
                 vox.add((self.x // grid, j))
-            for i in np.arange((self.x + self.x_ * dt) // grid, (self.x + self.x_ * dt + self.image.width()) // grid + 1):
+            for i in np.arange((self.x + self.x_ * dt) // grid,
+                               (self.x + self.x_ * dt + self.image.width()) // grid + 1):
                 vox.add((i, (self.y + self.y_ * dt) // grid))
-            for j in np.arange((self.y + self.y_ * dt) // grid, (self.y + self.y_ * dt + self.image.height()) // grid + 1):
+            for j in np.arange((self.y + self.y_ * dt) // grid,
+                               (self.y + self.y_ * dt + self.image.height()) // grid + 1):
                 vox.add(((self.x + self.image.width() + self.x_ * dt) // grid, j))
         elif np.sign(self.x_) == -1 and np.sign(self.y_) == 1:
             vox = vox.union(mini())
@@ -341,9 +370,11 @@ class Character:
                 vox.add((i, self.y // grid))
             for j in np.arange(self.y // grid, (self.y + self.image.height()) // grid + 1):
                 vox.add(((self.x + self.image.width()) // grid, j))
-            for i in np.arange((self.x + self.x_ * dt) // grid, (self.x + self.x_ * dt + self.image.width()) // grid + 1):
+            for i in np.arange((self.x + self.x_ * dt) // grid,
+                               (self.x + self.x_ * dt + self.image.width()) // grid + 1):
                 vox.add((i, (self.y + self.image.height() + self.y_ * dt) // grid))
-            for j in np.arange((self.y + self.y_ * dt) // grid, (self.y + self.y_ * dt + self.image.height()) // grid + 1):
+            for j in np.arange((self.y + self.y_ * dt) // grid,
+                               (self.y + self.y_ * dt + self.image.height()) // grid + 1):
                 vox.add(((self.x + self.x_ * dt) // grid, j))
         elif np.sign(self.x_) == 1 and np.sign(self.y_) == 1:
             vox = vox.union(mini(self.image.width(), 0))
@@ -352,9 +383,11 @@ class Character:
                 vox.add((i, self.y // grid))
             for j in np.arange(self.y // grid, (self.y + self.image.height()) // grid + 1):
                 vox.add((self.x // grid, j))
-            for i in np.arange((self.x + self.x_ * dt) // grid, (self.x + self.x_ * dt + self.image.width()) // grid + 1):
+            for i in np.arange((self.x + self.x_ * dt) // grid,
+                               (self.x + self.x_ * dt + self.image.width()) // grid + 1):
                 vox.add((i, (self.y + self.image.height() + self.y_ * dt) // grid))
-            for j in np.arange((self.y + self.y_ * dt) // grid, (self.y + self.y_ * dt + self.image.height()) // grid + 1):
+            for j in np.arange((self.y + self.y_ * dt) // grid,
+                               (self.y + self.y_ * dt + self.image.height()) // grid + 1):
                 vox.add(((self.x + self.x_ * dt + self.image.width()) // grid, j))
         elif np.sign(self.x_) == -1 and np.sign(self.y_) == -1:
             vox = vox.union(mini(self.image.width(), 0))
@@ -363,9 +396,11 @@ class Character:
                 vox.add((i, (self.y + self.image.height()) // grid))
             for j in np.arange(self.y // grid, (self.y + self.image.height()) // grid + 1):
                 vox.add(((self.x + self.image.width()) // grid, j))
-            for i in np.arange((self.x + self.x_ * dt) // grid, (self.x + self.x_ * dt + self.image.width()) // grid + 1):
+            for i in np.arange((self.x + self.x_ * dt) // grid,
+                               (self.x + self.x_ * dt + self.image.width()) // grid + 1):
                 vox.add((i, (self.y + self.y_ * dt) // grid))
-            for j in np.arange((self.y + self.y_ * dt) // grid, (self.y + self.y_ * dt + self.image.height()) // grid + 1):
+            for j in np.arange((self.y + self.y_ * dt) // grid,
+                               (self.y + self.y_ * dt + self.image.height()) // grid + 1):
                 vox.add(((self.x + self.x_ * dt) // grid, j))
         elif np.sign(self.x_) == 0 and np.sign(self.y_) == 1:
             for i in np.arange(self.x // grid, (self.x + self.image.width() + self.x_ * dt) // grid + 1):
@@ -401,7 +436,10 @@ class Character:
         """Binds the character controls and marks the given Character as being controlled"""
         Character.controlled = self
         Character.canvas.bind("<KeyPress-space>", key_pressed)
+        Character.canvas.bind("<KeyPress-space>", lambda event: self.jump())
         Character.canvas.bind("<KeyRelease-space>", key_release)
+        Character.canvas.bind("<KeyPress-c>", key_pressed)
+        Character.canvas.bind("<KeyRelease-c>", key_release)
         Character.canvas.bind("<KeyPress-Up>", key_pressed)
         Character.canvas.bind("<KeyRelease-Up>", key_release)
         Character.canvas.bind("<KeyPress-Down>", key_pressed)
@@ -411,6 +449,15 @@ class Character:
         Character.canvas.bind("<KeyPress-Right>", key_pressed)
         Character.canvas.bind("<KeyRelease-Right>", key_release)
         Character.canvas.focus_set()
+
+    def jump(self):
+        if 'j' not in Character.oncePerFrame:
+            Character.oncePerFrame.add('j')
+            self.y_ -= 1
+
+    def move(self, direction):
+        if self.x_ * direction < 0.5:
+            self.x_ += direction * Fraction(0.05)
 
 
 def setLevelSize(xSize, ySize):
@@ -472,8 +519,6 @@ def textFlicker(root, canvas, text):
 
 def startOpeningScene():
     clearWindow()
-    pygame.mixer.music.load('PreludeInCMinor.mp3')
-    pygame.mixer.music.play(loops=-1, fade_ms=3000)
     Character.canvas.create_text(width / 2, height / 2, text=" by Jack Meyer Garvey", fill="white",
                                  font="system 32")
     loop = Character.root.after(2500, openingScene)
@@ -484,19 +529,21 @@ def openingScene():
     clearWindow()
     Character('WhiteFloor.png', dynamic=False).spawnChar(0, height / 2 + 63.01)
     You = Character('BlueBoxDot.png')
-    You.mass = 2
-    You.y__['gravity'] = 0.002
+    You.y__['gravity'] = Fraction(0.002)
     You.spawnChar(400.1, -64.1)
     You = Character('BlueBoxDot.png')
-    You.y__['gravity'] = 0.002
-    You.gainControl()
+    You.y__['gravity'] = Fraction(0.002)
     You.spawnChar(400.1, -500.1)
+    You = Character('BlueBoxDot.png')
+    You.y__['gravity'] = Fraction(0.002)
+    You.spawnChar(400.1, -900)
 
     You = Character(pic='BlueBox.png', pic2='WhiteBox.png')
-    You.y__['gravity'] = 0.002
-    You.x_ = 0.05
+    You.y__['gravity'] = Fraction(0.002)
+    You.x_ = Fraction(0.2)
     You.spawnChar(0, height / 2 - 10)
-    setLevelSize(width, height)
+    You.gainControl()
+    setLevelSize(width * 2, height * 3)
     physicsLoop()
 
 
@@ -520,9 +567,11 @@ def clearWindow():
     PlatformerTextbox.textBox.questionQueue.clear()
     PlatformerTextbox.textBox.openFunctions.clear()
     PlatformerTextbox.textBox.exitFunctions.clear()
+    Character.hashTable = {}
+    Character.collisions = {1: {}}
     Character.controlled = None
-    Character.keys = {'Left': False, 'Right': False, 'Down': False}
-    Character.lockedKeys = {'Left': False, 'Right': False, 'Down': False, 'Up': False, 'space': False}
+    Character.keys = {'c': False, 'Left': False, 'Right': False}
+    oncePerFrame = set()
     Character.canvas = Canvas(Character.root, width=width, height=height, bg='black')
     PlatformerTextbox.textBox.canvas = Character.canvas
     Character.canvas.focus_set()
@@ -540,8 +589,6 @@ Character.root.title("PlatFormer")
 Character.canvas = Canvas(Character.root, width=width, height=height, bg='black')
 PlatformerTextbox.textBox.canvas = Character.canvas
 Character.canvas.focus_set()
-pygame.init()
-pygame.mixer.init()
 
 startGame()
 Character.start = time()
