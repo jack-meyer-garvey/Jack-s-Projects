@@ -6,25 +6,40 @@ import collections
 from fractions import Fraction
 
 
-def physicsLoop(dt=Fraction(20)):
+def physicsLoop():
+    grid = Character.grid
+    dt = Character.dt
     start = time()
-    Character.oncePerFrame.clear()
+
     # Queue the next frame
     Character.nextFrame = Character.root.after(dt, physicsLoop)
+
+    if Character.jumpBuffer:
+        Character.jumpBuffer -= 1
+        Character.controlled.jump(False)
+
+    # Run the queued functions from between frames
+    for _ in Character.oncePerFrame:
+        _()
+    Character.oncePerFrame.clear()
+
+    # If x is being pressed, rewind
+    if Character.keys['x']:
+        rewind()
+        return
+
     if Character.controlled is not None:
-        # If B is being pressed, rewind
-        if Character.keys['c']:
-            rewind()
-            return
-        if Character.keys['Left'] and not Character.keys['Right']:
+        if Character.controlled.y_ >= 0:
+            Character.controlled.y__['gravity'] = Fraction(0.004)
+        if Character.keys['space'] and Character.controlled.beneath(grid):
+            Character.controlled.glide()
+        elif Character.keys['Left'] and not Character.keys['Right']:
             Character.controlled.move(-1)
         elif Character.keys['Right'] and not Character.keys['Left']:
             Character.controlled.move(1)
 
-    # Set the spacial hashtable grid size
-    grid = Character.xLevelSize // dt
-    newHash = {}
-    for P in Character.instances:
+    newHash = Character.stableHashTable.copy()
+    for P in Character.dynamicChars:
         # Save the previous frame for rewind
         P.xPath.append(P.x)
         P.yPath.append(P.y)
@@ -67,7 +82,7 @@ def physicsLoop(dt=Fraction(20)):
     tP = 0
     timeQueue = sorted(Character.collisions.keys())
     while tP < len(timeQueue):
-        for P in Character.instances:
+        for P in Character.dynamicChars:
             P.x += P.x_ * dt * (timeQueue[tP] - timeElapsed)
             P.y += P.y_ * dt * (timeQueue[tP] - timeElapsed)
         pairQueue = list(Character.collisions[timeQueue[tP]].keys())
@@ -92,51 +107,80 @@ def physicsLoop(dt=Fraction(20)):
                         A.y_, B.y_ = B.y_, A.y_
                 collisionPears = set()
                 for C in [A, B]:
-                    for _ in C.rectangleTraversal(grid, dt * (1 - timeQueue[tP])):
-                        if _ in Character.hashTable:
-                            for D in Character.hashTable[_]:
-                                if (C.index, D.index) not in collisionPears:
-                                    collisionPears.add((C.index, D.index))
-                                    truth, normX, normY, timeC = SweptAABB(C.x, C.y, C.x_, C.y_,
-                                                                           C.image.width(),
-                                                                           C.image.height(),
-                                                                           D.x, D.y, D.x_, D.y_,
-                                                                           D.image.width(), D.image.height(),
-                                                                           dt * (1 - timeQueue[tP]))
-                                    if not truth:
-                                        timeC = timeQueue[tP] + (1 - timeQueue[tP]) * timeC
-                                        if timeC not in Character.collisions:
-                                            Character.collisions[timeC] = {}
-                                        Character.collisions[timeC][(C.index, D.index)] = True
-                                        if timeC not in timeQueue:
-                                            timeQueue.append(timeC)
-                                        elif timeC == timeQueue[tP]:
-                                            pairQueue.append((C.index, D.index))
-                        else:
-                            Character.hashTable[_] = {}
-                        Character.hashTable[_][A] = True
+                    if C.dynamic:
+                        for _ in C.rectangleTraversal(grid, dt * (1 - timeQueue[tP])):
+                            if _ in Character.hashTable:
+                                for D in Character.hashTable[_]:
+                                    if (C.index, D.index) not in collisionPears and C.index != D.index:
+                                        collisionPears.add((C.index, D.index))
+                                        truth, normX, normY, timeC = SweptAABB(C.x, C.y, C.x_, C.y_,
+                                                                               C.image.width(),
+                                                                               C.image.height(),
+                                                                               D.x, D.y, D.x_, D.y_,
+                                                                               D.image.width(), D.image.height(),
+                                                                               dt * (1 - timeQueue[tP]))
+                                        if not truth:
+                                            timeC = timeQueue[tP] + (1 - timeQueue[tP]) * timeC
+                                            if timeC not in Character.collisions:
+                                                Character.collisions[timeC] = {}
+                                            Character.collisions[timeC][(C.index, D.index)] = True
+                                            if timeC not in timeQueue:
+                                                timeQueue.append(timeC)
+                                            elif timeC == timeQueue[tP]:
+                                                pairQueue.append((C.index, D.index))
+                            else:
+                                Character.hashTable[_] = {}
+                            Character.hashTable[_][A] = True
         timeQueue = sorted(timeQueue)
         timeElapsed = timeQueue[tP]
         tP += 1
-
     Character.collisions.clear()
     Character.collisions[1] = {}
 
-    # update coordinates of the picture and apply acceleration
-    for P in Character.instances:
+    if Character.controlled is not None:
+        truth, Character.controlled.relativeX_ = Character.controlled.onGround(grid)
+        if truth:
+            Character.isGrounded.append(True)
+            if Character.keys['Right']:
+                Character.controlled.xDrag = max(-Fraction(0.01) * np.sign(Character.controlled.x_), 0)
+            elif Character.keys['Left']:
+                Character.controlled.xDrag = max(Fraction(0.01) * np.sign(Character.controlled.x_), 0)
+            else:
+                Character.controlled.xDrag = Fraction(0.01)
+
+        else:
+            Character.isGrounded.append(False)
+            Character.controlled.xDrag = 0
+
+        truth, direction, jumpDirection = Character.controlled.onWall(grid)
+        if truth and Character.keys[direction]:
+            Character.controlled.yDrag = max(Fraction(0.01) * np.sign(Character.controlled.y_), 0)
+        else:
+            Character.controlled.yDrag = 0
+
+            # update coordinates of the picture and apply acceleration
+    for P in Character.dynamicChars:
         # x direction acceleration
-        P.x_ = P.x_ + sum(P.x__.values()) * dt - P.xDrag * P.x_ * dt
+        P.x_ = round(P.x_ + sum(P.x__.values()) * dt - P.xDrag * (P.x_ - P.relativeX_) * dt, 5)
         # y direction acceleration
-        P.y_ = P.y_ + sum(P.y__.values()) * dt - P.yDrag * P.y_ * dt
+        P.y_ = round(P.y_ + sum(P.y__.values()) * dt - P.yDrag * P.y_ * dt, 5)
 
         Character.canvas.coords(P.imageID, float(P.x), float(P.y))
-
     centerScreen()
 
     end = time()
     total = 1000 * (end - start)
     if total > 20:
         print(total)
+
+
+def freezePhysics():
+    Character.root.after_cancel(Character.nextFrame)
+
+
+def unfreezePhysics():
+    Character.oncePerFrame.clear()
+    physicsLoop()
 
 
 def centerScreen():
@@ -231,16 +275,23 @@ def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, heigh
         return 0, normalX, normalY, entryTime
 
 
-def key_pressed(event):
+def key_pressed(event, func=None):
+    if func is not None:
+        Character.oncePerFrame.append(func)
     Character.keys[event.keysym] = True
 
 
-def key_release(event):
+def key_release(event, func=None):
+    if func is not None:
+        Character.oncePerFrame.append(func)
     Character.keys[event.keysym] = False
 
 
 def rewind():
-    for P in Character.instances:
+    Character.isGrounded.clear()
+    Character.jumpBuffer = 0
+    newHash = Character.stableHashTable.copy()
+    for P in Character.dynamicChars:
         if len(P.xPath) != 0:
             P.x = P.xPath.pop()
             P.y = P.yPath.pop()
@@ -249,26 +300,40 @@ def rewind():
 
             Character.canvas.coords(P.imageID, float(P.x), float(P.y))
 
-            centerScreen()
+        for _ in P.rectangleTraversal(Character.grid, Character.dt):
+            if _ not in newHash:
+                newHash[_] = {}
+            newHash[_][P] = True
+    Character.hashTable = newHash
+    Character.isGrounded.append(Character.controlled.onGround(Character.grid)[0])
+
+    centerScreen()
 
 
 class Character:
     canvas = None
     root = None
     instances = []
+    dynamicChars = []
+    notDynChars = []
     nextFrame = None
     hashTable = {}
+    stableHashTable = {}
     collisions = {1: {}}
     controlled = None
-    keys = {'c': False, 'Left': False, 'Right': False}
-    oncePerFrame = set()
-    screenAdjustX = 450
+    keys = {'z': False, 'x': False, 'space': False, 'Left': False, 'Right': False, 'Up': False, 'Down': False}
+    isGrounded = collections.deque(maxlen=4)
+    jumpBuffer = 0
+    oncePerFrame = []
+    screenAdjustX = 602
     screenAdjustY = 450
 
     loopsRunning = []
 
     xLevelSize = 1024
     yLevelSize = 768
+    grid = 300
+    dt = 20
 
     xScreenPosition = 0
     yScreenPosition = 0
@@ -283,13 +348,16 @@ class Character:
 
         self.xDrag = 0
         self.yDrag = 0
-        self.xElastic = 0
-        self.yElastic = 0
+        self.relativeX_ = 0
         self.image = PhotoImage(file=pic)
         self.imageID = None
         if pic2 is not None:
             self.image2 = PhotoImage(file=pic2)
         self.dynamic = dynamic
+        if dynamic:
+            Character.dynamicChars.append(self)
+        else:
+            Character.notDynChars.append(self)
         self.mass = 1
 
         Character.instances.append(self)
@@ -305,6 +373,19 @@ class Character:
         self.x = Fraction(x)
         self.y = Fraction(y)
         self.imageID = Character.canvas.create_image(x, y, anchor='nw', image=self.image)
+        if self.dynamic:
+            for _ in self.rectangleTraversal(Character.grid, Character.dt):
+                if _ not in Character.hashTable:
+                    Character.hashTable[_] = {}
+                Character.hashTable[_][self] = True
+        else:
+            for _ in self.rectangleTraversal(Character.grid, Character.dt):
+                if _ not in Character.hashTable:
+                    Character.hashTable[_] = {}
+                if _ not in Character.stableHashTable:
+                    Character.stableHashTable[_] = {}
+                Character.hashTable[_][self] = True
+                Character.stableHashTable[_][self] = True
 
     def rectangleTraversal(self, grid, dt):
         """ see http://www.cse.yorku.ca/~amana/research/grid.pdf """
@@ -435,11 +516,12 @@ class Character:
     def gainControl(self):
         """Binds the character controls and marks the given Character as being controlled"""
         Character.controlled = self
-        Character.canvas.bind("<KeyPress-space>", key_pressed)
-        Character.canvas.bind("<KeyPress-space>", lambda event: self.jump())
-        Character.canvas.bind("<KeyRelease-space>", key_release)
-        Character.canvas.bind("<KeyPress-c>", key_pressed)
-        Character.canvas.bind("<KeyRelease-c>", key_release)
+        Character.canvas.bind("<KeyPress-space>", lambda event: key_pressed(event, self.jump))
+        Character.canvas.bind("<KeyRelease-space>", lambda event: key_release(event, self.jumpRelease))
+        Character.canvas.bind("<KeyPress-z>", lambda event: key_pressed(event, self.inspect))
+        Character.canvas.bind("<KeyRelease-z>", key_release)
+        Character.canvas.bind("<KeyPress-x>", key_pressed)
+        Character.canvas.bind("<KeyRelease-x>", key_release)
         Character.canvas.bind("<KeyPress-Up>", key_pressed)
         Character.canvas.bind("<KeyRelease-Up>", key_release)
         Character.canvas.bind("<KeyPress-Down>", key_pressed)
@@ -450,14 +532,80 @@ class Character:
         Character.canvas.bind("<KeyRelease-Right>", key_release)
         Character.canvas.focus_set()
 
-    def jump(self):
-        if 'j' not in Character.oncePerFrame:
-            Character.oncePerFrame.add('j')
-            self.y_ -= 1
+    def beneath(self, grid):
+        for _ in np.arange(self.x // grid, (self.x + self.image.width()) // grid + 1):
+            if (_, self.y // grid) in Character.hashTable:
+                for P in Character.hashTable[(_, self.y // grid)]:
+                    if P != self and self.y == P.y + P.image.height() and \
+                            (self.x <= (P.x + P.image.width()) and P.x <= (self.x + self.image.width())):
+                        return True
+        return False
+
+    def onGround(self, grid):
+        for _ in np.arange(self.x // grid, (self.x + self.image.width()) // grid + 1):
+            if (_, (self.y + self.image.height()) // grid) in Character.hashTable:
+                for P in Character.hashTable[(_, (self.y + self.image.height()) // grid)]:
+                    if P != self and P.y == self.y + self.image.height() and \
+                            (self.x <= (P.x + P.image.width()) and P.x <= (self.x + self.image.width())):
+                        return True, P.x_
+        return False, 0
+
+    def onWall(self, grid):
+        for _ in np.arange(self.y // grid, (self.y + self.image.height()) // grid + 1):
+            if (self.x // grid, _) in Character.hashTable:
+                for P in Character.hashTable[(self.x // grid, _)]:
+                    if P != self and self.x == P.x + P.image.width() and \
+                            (self.y <= (P.y + P.image.height()) and P.y <= (self.y + self.image.height())):
+                        return True, 'Left', 1
+            if ((self.x + self.image.width()) // grid, _) in Character.hashTable:
+                for P in Character.hashTable[((self.x + self.image.width()) // grid, _)]:
+                    if P != self and P.x == self.x + self.image.width() and \
+                            (self.y <= (P.y + P.image.height()) and P.y <= (self.y + self.image.height())):
+                        return True, 'Right', -1
+        return False, 'Left', 0
+
+    def jump(self, pressed=True):
+        if pressed:
+            Character.jumpBuffer = 4
+        truth, direction, jumpDirection = self.onWall(Character.grid)
+        if Character.keys['space']:
+            self.y__['gravity'] = Fraction(0.002)
+        else:
+            self.y__['gravity'] = Fraction(0.008)
+        if any(Character.isGrounded):
+            Character.isGrounded.clear()
+            self.y_ = -(abs(self.x_) / 4 + Fraction(4, 5))
+            Character.jumpBuffer = 0
+        elif truth and Character.keys[direction]:
+            self.y_ = -Fraction(4, 5)
+            self.x_ = jumpDirection
+            Character.jumpBuffer = 0
+
+    def jumpRelease(self):
+        self.y__['gravity'] = Fraction(0.008)
 
     def move(self, direction):
-        if self.x_ * direction < 0.5:
-            self.x_ += direction * Fraction(0.05)
+        if self.x_ * direction < 1 + abs(self.relativeX_):
+            self.x_ += direction * Fraction(1, 20)
+
+    def glide(self):
+        self.y_ = 0
+
+    def inspect(self):
+        for _ in np.arange(self.x // Character.grid, (self.x + self.image.width()) // Character.grid + 1):
+            for __ in np.arange(self.y // Character.grid, (self.y + self.image.height()) // Character.grid + 1):
+                if (_, __) in funcHold.hashTable:
+                    for fH in funcHold.hashTable[(_, __)]:
+                        if do_overlap(self, fH):
+                            fH.inspect()
+                            return
+
+
+def do_overlap(chara, fH):
+    if (chara.x < fH.x + fH.width and chara.x + chara.image.width() > fH.x and
+            chara.y < fH.y + fH.height and chara.y + chara.image.height() > fH.y):
+        return True
+    return False
 
 
 def setLevelSize(xSize, ySize):
@@ -501,6 +649,66 @@ class Canvas(Canvas):
         self.deletecommand(funcId)
 
 
+class funcHold:
+    instances = []
+    hashTable = {}
+
+    def __init__(self, pic, *func):
+        funcHold.instances.append(self)
+        self.image = PhotoImage(file=pic)
+        self.imageID = None
+        self.func = list(func)
+        self.x = 0
+        self.y = 0
+        self.width = self.image.width() + 20
+        self.height = self.image.height() + 20
+
+    def spawn(self, x, y):
+        self.x = Fraction(x)
+        self.y = Fraction(y)
+        self.imageID = Character.canvas.create_image(x, y, anchor='nw', image=self.image)
+        for _ in np.arange(self.x // Character.grid, (self.x + self.width) // Character.grid + 1):
+            for __ in np.arange(self.y // Character.grid, (self.y + self.height) // Character.grid + 1):
+                if (_, __) not in funcHold.hashTable:
+                    funcHold.hashTable[(_, __)] = []
+                funcHold.hashTable[(_, __)].append(self)
+
+    def inspect(self):
+        for func in self.func:
+            func()
+
+    def queueText(self, text, face=None, textSpeed=20, options=None, condition=0, openFunctions=None,
+                  exitFunctions=None):
+        if exitFunctions is None:
+            exitFunctions = []
+        if openFunctions is None:
+            openFunctions = []
+        if options is None:
+            options = []
+        openFunctions.append(freezePhysics)
+        exitFunctions.append(unfreezePhysics)
+        self.func.append(lambda: PlatformerTextbox.textBox(
+            text, face, textSpeed, options, condition, openFunctions, exitFunctions))
+        self.func.append(PlatformerTextbox.runQueue)
+
+
+class background:
+    instances = []
+
+    def __init__(self, pic, layer=0):
+        background.instances.append(self)
+        self.image = PhotoImage(file=pic)
+        self.imageID = None
+        self.x = 0
+        self.y = 0
+        self.layer = layer
+
+    def spawn(self, x, y):
+        self.x = Fraction(x)
+        self.y = Fraction(y)
+        self.imageID = Character.canvas.create_image(x, y, anchor='nw', image=self.image)
+
+
 def startGame():
     text = Character.canvas.create_text(width / 2, height / 2, text="Press X to start", fill="white", font="system 18")
     textFlicker(Character.root, Character.canvas, text)
@@ -527,23 +735,32 @@ def startOpeningScene():
 
 def openingScene():
     clearWindow()
-    Character('WhiteFloor.png', dynamic=False).spawnChar(0, height / 2 + 63.01)
+    background('Clouds1.png', 1).spawn(0, 0)
+    background('Clouds2.png', 2).spawn(0, 0)
+    background('Clouds3.png', 3).spawn(0, 0)
+    Character('WhiteFloor.png', dynamic=False).spawnChar(300, 900+300)
+    Character('WhiteFloor.png', dynamic=False).spawnChar(760, 500+300)
     You = Character('BlueBoxDot.png')
-    You.y__['gravity'] = Fraction(0.002)
-    You.spawnChar(400.1, -64.1)
+    You.y__['gravity'] = Fraction(0.004)
+    You.spawnChar(760, 200+300)
     You = Character('BlueBoxDot.png')
-    You.y__['gravity'] = Fraction(0.002)
-    You.spawnChar(400.1, -500.1)
+    You.y__['gravity'] = Fraction(0.004)
+    You.spawnChar(760, 300)
     You = Character('BlueBoxDot.png')
-    You.y__['gravity'] = Fraction(0.002)
-    You.spawnChar(400.1, -900)
+    You.y__['gravity'] = Fraction(0.004)
+    You.spawnChar(900, 1060)
+    Character('WhiteWall.png', dynamic=False).spawnChar(700, 780+300)
+    Character('WhiteWall.png', dynamic=False).spawnChar(2050, 300+300)
+    PlatformerTextbox.runQueue()
+
+    sign = funcHold('Sign.png')
+    sign.queueText("Do you like it?", options=["Yes", "No", " Maybe LOL"])
+    sign.spawn(400, 760+300)
 
     You = Character(pic='BlueBox.png', pic2='WhiteBox.png')
-    You.y__['gravity'] = Fraction(0.002)
-    You.x_ = Fraction(0.2)
-    You.spawnChar(0, height / 2 - 10)
+    You.spawnChar(300, 900 - 70 + 300)
     You.gainControl()
-    setLevelSize(width * 2, height * 3)
+    setLevelSize(2400, 1500)
     physicsLoop()
 
 
@@ -570,16 +787,27 @@ def clearWindow():
     Character.hashTable = {}
     Character.collisions = {1: {}}
     Character.controlled = None
-    Character.keys = {'c': False, 'Left': False, 'Right': False}
-    oncePerFrame = set()
+    Character.keys = {'z': False, 'x': False, 'space': False, 'Left': False, 'Right': False, 'Up': False, 'Down': False}
+    Character.oncePerFrame = []
+    Character.grid = 300
+    Character.dt = 20
     Character.canvas = Canvas(Character.root, width=width, height=height, bg='black')
     PlatformerTextbox.textBox.canvas = Character.canvas
     Character.canvas.focus_set()
     Character.canvas.pack()
 
+    Character.dynamicChars = []
+    Character.notDynChars = []
+    Character.stableHashTable = {}
+    Character.isGrounded = collections.deque(maxlen=4)
+    Character.jumpBuffer = 0
 
-width = int(1024 * 1.3)
-height = int(768 * 1.1)
+    funcHold.instances = []
+    funcHold.hashTable = {}
+
+
+width = 1330
+height = 845
 Character.root = Tk()
 PlatformerTextbox.textBox.root = Character.root
 Character.root.geometry(f"{width}x{height}")

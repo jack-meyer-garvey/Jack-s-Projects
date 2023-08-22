@@ -46,8 +46,11 @@ def closeBoxes():
     for _ in textBox.imagesShown.keys():
         textBox.canvas.delete(textBox.imagesShown[_])
         textBox.imagesShown[_] = -1
-    textBox.canvas.unbind("<KeyPress-x>")
-    textBox.canvas.unbind("<KeyPress-z>")
+    if textBox.bindingX is not None:
+        textBox.canvas.unbind("<KeyPress-x>", textBox.bindingX)
+        textBox.bindingX = None
+    textBox.canvas.unbind("<KeyPress-z>", textBox.bindingZ)
+    textBox.bindingZ = None
     textBox.imageInstances.clear()
     for _ in textBox.exitFunctions:
         _()
@@ -81,7 +84,7 @@ def moveArrow(event, text, options):
     textBox.arrow = textBox.arrow % 10
     if event.keysym == 'Up':
         textBox.arrow -= 1
-    if event.keysym == 'Down':
+    elif event.keysym == 'Down':
         textBox.arrow += 1
     if textBox.arrow < 1:
         textBox.arrow = len(options)
@@ -149,19 +152,27 @@ def nextQueue():
 
 def skipText(text, options):
     """Skips through the text that is currently being written and binds the z key to move to the next text box"""
-    textBox.canvas.unbind("<KeyPress-x>")
-    textBox.canvas.unbind("<KeyPress-z>")
+    if textBox.bindingX is not None:
+        textBox.canvas.unbind("<KeyPress-x>", textBox.bindingX)
+    textBox.bindingX = None
+    if textBox.bindingZ is not None:
+        textBox.canvas.unbind("<KeyPress-z>", textBox.bindingZ)
+        textBox.bindingZ = None
     if textBox.textShown['mainText'] is not None:
         clearText()
         makeText(text)
-        textBox.canvas.bind("<KeyPress-z>", lambda event: nextQueue())
+        textBox.bindingZ = textBox.canvas.bind("<KeyPress-z>", lambda event: nextQueue(), '+')
         makeOption(options)
 
 
 def runBox(textSpeed, text, options, face):
     """Types out text at a given speed. Also binds the x and z keys to move through text boxes"""
-    textBox.canvas.unbind("<KeyPress-x>")
-    textBox.canvas.unbind("<KeyPress-z>")
+    if textBox.bindingX is not None:
+        textBox.canvas.unbind("<KeyPress-x>", textBox.bindingX)
+        textBox.bindingX = None
+    if textBox.bindingZ is not None:
+        textBox.canvas.unbind("<KeyPress-z>", textBox.bindingZ)
+        textBox.bindingZ = None
     if textBox.imagesShown['face'] != -1:
         textBox.canvas.delete(textBox.imagesShown['face'])
     if face is not None:
@@ -181,12 +192,21 @@ def runBox(textSpeed, text, options, face):
         loop = textBox.root.after(wait, makeText, text[:_])
         textBox.loopsRunning.append(loop)
 
-    textBox.canvas.bind("<KeyPress-x>", lambda event: skipText(text, options))
+    if textBox.bindingX is None:
+        textBox.bindingX = textBox.canvas.bind("<KeyPress-x>", lambda event: skipText(text, options), '+')
 
-    loop = textBox.root.after(wait, textBox.canvas.bind, "<KeyPress-z>", lambda event: nextQueue())
+    loop = textBox.root.after(wait, bindZ)
     textBox.loopsRunning.append(loop)
     loop = textBox.root.after(wait, makeOption, options)
     textBox.loopsRunning.append(loop)
+
+
+def bindZ():
+    """Function specifically used to save the binding for the Z button while also setting it in an after loop"""
+    textBox.bindingZ = textBox.canvas.bind("<KeyPress-z>", lambda event: nextQueue(), '+')
+    if textBox.bindingX is not None:
+        textBox.canvas.unbind("<KeyPress-x>", textBox.bindingX)
+        textBox.bindingX = None
 
 
 def runQueue():
@@ -225,8 +245,17 @@ class textBox:
     # Keeps track of screen position for drawing
     xScreenPosition = 0
     yScreenPosition = 0
+    # Binding addresses for the main textBox buttons
+    bindingX = None
+    bindingZ = None
 
-    def __init__(self, text, face=None, textSpeed=20, options=[], condition=0, openFunctions=[], exitFunctions=[]):
+    def __init__(self, text, face=None, textSpeed=20, options=None, condition=0, openFunctions=None, exitFunctions=None):
+        if exitFunctions is None:
+            exitFunctions = []
+        if openFunctions is None:
+            openFunctions = []
+        if options is None:
+            options = []
         textBox.instances.append(self)
         textBox.openFunctions.append(openFunctions)
         for _ in exitFunctions:
