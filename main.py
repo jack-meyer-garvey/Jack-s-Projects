@@ -4,7 +4,7 @@ from continuousCollision import *
 def startGame():
     text = Character.canvas.create_text(width / 2, height / 2, text="Press X to start", fill="white", font="system 18")
     textFlicker(Character.root, Character.canvas, text)
-    Character.canvas.bind("<KeyPress-z>", lambda event: startOpeningScene())
+    Character.canvas.bind("<KeyPress-z>", lambda event: openCredit())
 
 
 def textFlicker(root, canvas, text):
@@ -13,19 +13,19 @@ def textFlicker(root, canvas, text):
         canvas.itemconfigure(text, fill='black')
     else:
         canvas.itemconfigure(text, fill='white')
-    loop = root.after(500, textFlicker, root, canvas, text)
+    loop = root.after(800, textFlicker, root, canvas, text)
     Character.loopsRunning.append(loop)
 
 
-def startOpeningScene():
+def openCredit():
     clearWindow()
-    Character.canvas.create_text(width / 2, height / 2, text=" by Jack Meyer Garvey", fill="white",
-                                 font="system 32")
-    loop = Character.root.after(2500, openingScene)
+    audio('Ironic')
+    Character.canvas.create_text(width / 2, height / 2, text="by Jack Meyer Garvey", fill="white", font="system 32")
+    loop = Character.root.after(1200, testGame)
     Character.loopsRunning.append(loop)
 
 
-def openingScene():
+def testGame():
     clearWindow()
     background('Clouds1.png', 0).spawn(0, 0)
     background('Clouds2.png', 2).spawn(0, 0)
@@ -49,9 +49,11 @@ def openingScene():
     sign.queueText("Do you like it?", options=["Yes", "No", " Maybe LOL"])
     sign.spawn(400, 760 + 300)
 
-    You = Character(pic='BlueBox.png', pic2='WhiteBox.png')
-    You.spawnChar(300, 900 - 70 + 300)
+    You = Character(pic='blueBox.png', pic2='WhiteBox.png')
+
+    You.spawnChar(300, 0)
     You.gainControl()
+
     setLevelSize(2400, 1500)
     physicsLoop()
 

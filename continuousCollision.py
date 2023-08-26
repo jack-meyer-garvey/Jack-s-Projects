@@ -1,4 +1,5 @@
 from tkinter import *
+from audio import *
 import PlatformerTextbox
 import numpy as np
 from time import time
@@ -38,7 +39,7 @@ def physicsLoop():
         elif Character.keys['Right'] and not Character.keys['Left']:
             Character.controlled.move(1)
 
-    newHash = Character.stableHashTable.copy()
+    newHash = {key: val.copy() for key, val in Character.stableHashTable.items()}
     for P in Character.dynamicChars:
         # Save the previous frame for rewind
         P.xPath.append(P.x)
@@ -166,6 +167,10 @@ def physicsLoop():
         P.y_ = round(P.y_ + sum(P.y__.values()) * dt - P.yDrag * P.y_ * dt, 5)
 
         Character.canvas.coords(P.imageID, float(P.x), float(P.y))
+
+    for P in animation.active.copy():
+        animation.instances[P].nextFrame()
+
     centerScreen()
 
     end = time()
@@ -296,9 +301,9 @@ def key_release(event, func=None):
 def rewind():
     Character.isGrounded.clear()
     Character.jumpBuffer = 0
-    newHash = Character.stableHashTable.copy()
+    newHash = {key: val.copy() for key, val in Character.stableHashTable.items()}
     for P in Character.dynamicChars:
-        if len(P.xPath) != 0:
+        if len(P.xPath):
             P.x = P.xPath.pop()
             P.y = P.yPath.pop()
             P.x_ = P.x_Path.pop()
@@ -312,6 +317,10 @@ def rewind():
             newHash[_][P] = True
     Character.hashTable = newHash
     Character.isGrounded.append(Character.controlled.onGround(Character.grid)[0])
+    for P in animation.active:
+        P = animation.instances[P]
+        if len(P.framePath):
+            P.previousFrame()
 
     centerScreen()
 
@@ -369,16 +378,17 @@ class Character:
         Character.instances.append(self)
         self.index = len(Character.instances) - 1
 
-        self.xPath = collections.deque(maxlen=3000)
-        self.yPath = collections.deque(maxlen=3000)
-        self.x_Path = collections.deque(maxlen=3000)
-        self.y_Path = collections.deque(maxlen=3000)
+        if self.dynamic:
+            self.xPath = collections.deque(maxlen=3000)
+            self.yPath = collections.deque(maxlen=3000)
+            self.x_Path = collections.deque(maxlen=3000)
+            self.y_Path = collections.deque(maxlen=3000)
 
-    def spawnChar(self, x, y):
+    def spawnChar(self, x, y, anchor='nw'):
         """Draws character in given position"""
         self.x = Fraction(x)
         self.y = Fraction(y)
-        self.imageID = Character.canvas.create_image(x, y, anchor='nw', image=self.image)
+        self.imageID = Character.canvas.create_image(x, y, anchor=anchor, image=self.image)
         if self.dynamic:
             for _ in self.rectangleTraversal(Character.grid, Character.dt):
                 if _ not in Character.hashTable:
@@ -540,9 +550,9 @@ class Character:
 
     def beneath(self, grid):
         for _ in np.arange(self.x // grid, (self.x + self.image.width()) // grid + 1):
-            if (_, self.y // grid) in Character.hashTable:
-                for P in Character.hashTable[(_, self.y // grid)]:
-                    if P != self and self.y == P.y + P.image.height() and \
+            if (_, self.y // grid) in Character.stableHashTable:
+                for P in Character.stableHashTable[(_, self.y // grid)]:
+                    if self.y == P.y + P.image.height() and \
                             (self.x <= (P.x + P.image.width()) and P.x <= (self.x + self.image.width())):
                         return True
         return False
@@ -580,7 +590,10 @@ class Character:
             self.y__['gravity'] = Fraction(0.008)
         if any(Character.isGrounded):
             Character.isGrounded.clear()
-            self.y_ = -(abs(self.x_) / 4 + Fraction(4, 5))
+            if self.y_ >= 0:
+                self.y_ = -(abs(self.x_) / 4 + Fraction(4, 5))
+            else:
+                self.y_ -= abs(self.x_) / 4 + Fraction(4, 5)
             Character.jumpBuffer = 0
         elif truth and Character.keys[direction]:
             self.y_ = -Fraction(4, 5)
@@ -715,12 +728,71 @@ class background:
         self.imageID = Character.canvas.create_image(x, y, anchor='nw', image=self.image)
 
 
+class animation:
+    instances = []
+    active = set()
+
+    def __init__(self, imageContainer):
+        self.index = len(animation.instances)
+        animation.instances.append(self)
+        self.container = imageContainer
+        self.packages = {}
+        self.currentPackage = None
+        self.packageIndex = 0
+        self.framePath = collections.deque(maxlen=3000)
+        self.endFunc = [self.restart]
+
+    def nextFrame(self):
+        self.framePath.append((self.packageIndex, self.currentPackage))
+        self.packageIndex += 1
+        if self.packageIndex == len(self.currentPackage):
+            for _ in self.endFunc:
+                _()
+        else:
+            Character.canvas.itemconfig(self.container.imageID, image=self.currentPackage[self.packageIndex])
+
+    def restart(self):
+        self.packageIndex = 0
+        Character.canvas.itemconfig(self.container.imageID, image=self.currentPackage[self.packageIndex])
+
+    def start(self):
+        animation.active.add(self.index)
+
+    def end(self):
+        animation.active.remove(self.index)
+
+    def previousFrame(self):
+        self.packageIndex, self.currentPackage = self.framePath.pop()
+        Character.canvas.itemconfig(self.container.imageID, image=self.currentPackage[self.packageIndex])
+
+    def addImagePackage(self, name, numberOfFrames, specialName=None, switch=True, active=True):
+        if specialName is None:
+            specialName = name
+        if active:
+            animation.active.add(self.index)
+        pack = []
+        for _ in range(numberOfFrames):
+            pack.append(PhotoImage(file=f"{name}{_ + 1}.png"))
+        self.packages[specialName] = pack
+        if switch:
+            self.currentPackage = pack
+
+    def switchPack(self, name, index=0, end=None):
+        if end is not None:
+            self.endFunc.append(end)
+        self.currentPackage = self.packages[name]
+        self.packageIndex = index
+
+
 def clearWindow():
     """Destroys all widgets and ends all loops (including loops within text boxes)"""
-    Character.instances.clear()
     if Character.nextFrame is not None:
         Character.root.after_cancel(Character.nextFrame)
         Character.nextFrame = None
+    Character.instances.clear()
+    background.instances.clear()
+    animation.instances.clear()
+    animation.active.clear()
     for loop in Character.loopsRunning:
         Character.root.after_cancel(loop)
     for loop in PlatformerTextbox.textBox.loopsRunning:
@@ -735,11 +807,11 @@ def clearWindow():
     PlatformerTextbox.textBox.questionQueue.clear()
     PlatformerTextbox.textBox.openFunctions.clear()
     PlatformerTextbox.textBox.exitFunctions.clear()
-    Character.hashTable = {}
+    Character.hashTable.clear()
     Character.collisions = {1: {}}
     Character.controlled = None
     Character.keys = {'z': False, 'x': False, 'space': False, 'Left': False, 'Right': False, 'Up': False, 'Down': False}
-    Character.oncePerFrame = []
+    Character.oncePerFrame.clear()
     Character.grid = 300
     Character.dt = 20
     Character.canvas = Canvas(Character.root, width=1330, height=845, bg='black')
@@ -747,11 +819,11 @@ def clearWindow():
     Character.canvas.focus_set()
     Character.canvas.pack()
 
-    Character.dynamicChars = []
-    Character.notDynChars = []
-    Character.stableHashTable = {}
+    Character.dynamicChars.clear()
+    Character.notDynChars .clear()
+    Character.stableHashTable.clear()
     Character.isGrounded = collections.deque(maxlen=4)
     Character.jumpBuffer = 0
 
-    funcHold.instances = []
-    funcHold.hashTable = {}
+    funcHold.instances.clear()
+    funcHold.hashTable.clear()
