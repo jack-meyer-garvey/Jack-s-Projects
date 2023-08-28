@@ -155,7 +155,7 @@ def physicsLoop():
 
         truth, direction, jumpDirection = Character.controlled.onWall(grid)
         if truth and Character.keys[direction]:
-            Character.controlled.yDrag = max(Fraction(0.01) * np.sign(Character.controlled.y_), 0)
+            Character.controlled.yDrag = max(Fraction(0.02) * np.sign(Character.controlled.y_), 0)
         else:
             Character.controlled.yDrag = 0
 
@@ -220,8 +220,9 @@ def centerScreen():
         netChange = Character.canvas.xview()[0] - previous
         for P in background.instances:
             if P.layer:
-                P.x -= netChange * 0.1 * P.layer * Character.xLevelSize
-                Character.canvas.coords(P.imageID, float(P.x), float(P.y))
+                for _ in range(P.count):
+                    P.x[_] += netChange * 0.05 * P.layer * Character.xLevelSize
+                    Character.canvas.coords(P.imageID[_], float(P.x[_]), float(P.y[_]))
 
 
 def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, height2, dt):
@@ -336,7 +337,7 @@ class Character:
     stableHashTable = {}
     collisions = {1: {}}
     controlled = None
-    keys = {'z': False, 'x': False, 'space': False, 'Left': False, 'Right': False, 'Up': False, 'Down': False}
+    keys = {'z': False, 'x': False, 'space': False, 'c': False, 'Left': False, 'Right': False, 'Up': False, 'Down': False}
     isGrounded = collections.deque(maxlen=4)
     jumpBuffer = 0
     oncePerFrame = []
@@ -538,6 +539,8 @@ class Character:
         Character.canvas.bind("<KeyRelease-z>", key_release)
         Character.canvas.bind("<KeyPress-x>", key_pressed)
         Character.canvas.bind("<KeyRelease-x>", key_release)
+        Character.canvas.bind("<KeyPress-c>", key_pressed)
+        Character.canvas.bind("<KeyRelease-c>", key_release)
         Character.canvas.bind("<KeyPress-Up>", key_pressed)
         Character.canvas.bind("<KeyRelease-Up>", key_release)
         Character.canvas.bind("<KeyPress-Down>", key_pressed)
@@ -590,6 +593,7 @@ class Character:
             self.y__['gravity'] = Fraction(0.008)
         if any(Character.isGrounded):
             Character.isGrounded.clear()
+            Character.isGrounded.append(False)
             if self.y_ >= 0:
                 self.y_ = -(abs(self.x_) / 4 + Fraction(4, 5))
             else:
@@ -604,8 +608,16 @@ class Character:
         self.y__['gravity'] = Fraction(0.008)
 
     def move(self, direction):
-        if self.x_ * direction < 1 + abs(self.relativeX_):
-            self.x_ += direction * Fraction(1, 20)
+        if self.keys["c"]:
+            if self.x_ * direction < 1 + abs(self.relativeX_):
+                self.x_ += direction * Fraction(1, 20)
+                if self.x_ > 1 + abs(self.relativeX_):
+                    self.x_ = direction * (1 + abs(self.relativeX_))
+        else:
+            if self.x_ * direction < Fraction(1, 2) + abs(self.relativeX_):
+                self.x_ += direction * Fraction(1, 20)
+            elif Character.isGrounded[-1]:
+                self.x_ -= direction * Fraction(1, 4) * (abs(self.x_) - Fraction(1, 2) - abs(self.relativeX_))
 
     def glide(self):
         self.y_ = 0
@@ -717,15 +729,21 @@ class background:
     def __init__(self, pic, layer=0):
         background.instances.append(self)
         self.image = PhotoImage(file=pic)
-        self.imageID = None
-        self.x = 0
-        self.y = 0
+        self.imageID = []
+        self.x = []
+        self.y = []
         self.layer = layer
+        self.count = 0
 
-    def spawn(self, x, y):
-        self.x = Fraction(x)
-        self.y = Fraction(y)
-        self.imageID = Character.canvas.create_image(x, y, anchor='nw', image=self.image)
+    def spawn(self, x, y, numDown=1, numRight=1):
+        for posX in range(numRight):
+            for posY in range(numDown):
+                self.count += 1
+                hoiX = x + posX * self.image.width()
+                hoiY = y + posY * self.image.height()
+                self.x.append(Fraction(hoiX))
+                self.y.append(Fraction(hoiY))
+                self.imageID.append(Character.canvas.create_image(hoiX, hoiY, anchor='nw', image=self.image))
 
 
 class animation:
@@ -810,7 +828,7 @@ def clearWindow():
     Character.hashTable.clear()
     Character.collisions = {1: {}}
     Character.controlled = None
-    Character.keys = {'z': False, 'x': False, 'space': False, 'Left': False, 'Right': False, 'Up': False, 'Down': False}
+    Character.keys = {'z': False, 'x': False, 'space': False, 'c': False, 'Left': False, 'Right': False, 'Up': False, 'Down': False}
     Character.oncePerFrame.clear()
     Character.grid = 300
     Character.dt = 20

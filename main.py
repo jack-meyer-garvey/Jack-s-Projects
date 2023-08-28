@@ -2,7 +2,7 @@ from continuousCollision import *
 
 
 def startGame():
-    text = Character.canvas.create_text(width / 2, height / 2, text="Press X to start", fill="white", font="system 18")
+    text = Character.canvas.create_text(width / 2, height / 2, text="Press A to start", fill="white", font="system 18")
     textFlicker(Character.root, Character.canvas, text)
     Character.canvas.bind("<KeyPress-z>", lambda event: openCredit())
 
@@ -19,10 +19,27 @@ def textFlicker(root, canvas, text):
 
 def openCredit():
     clearWindow()
-    audio('Ironic')
     Character.canvas.create_text(width / 2, height / 2, text="by Jack Meyer Garvey", fill="white", font="system 32")
-    loop = Character.root.after(1200, testGame)
+    loop = Character.root.after(1200, bottomWell)
     Character.loopsRunning.append(loop)
+
+
+def bottomWell():
+    clearWindow()
+    brick = background('WhiteBrickBack.png')
+    brick.spawn(415, -133, numDown=5)
+    Character('WhiteBrickLeft.png', dynamic=False).spawnChar(600, 0)
+    Character('WhiteBrickRight.png', dynamic=False).spawnChar(400, 0)
+    Character('WhiteBrickCornerBR.png', dynamic=False).spawnChar(400, 1024)
+    Character('WhiteBrickCornerBL.png', dynamic=False).spawnChar(600, 1024)
+    Character('WhiteFloor.png', dynamic=False).spawnChar(0, 1224)
+    You = Character(pic='blueBox.png', pic2='WhiteBox.png')
+
+    You.spawnChar(0, 1224-63)
+    You.gainControl()
+
+    setLevelSize(1330, 1500)
+    physicsLoop()
 
 
 def testGame():
@@ -42,7 +59,7 @@ def testGame():
     You.y__['gravity'] = Fraction(0.004)
     You.spawnChar(900, 1060)
     Character('WhiteWall.png', dynamic=False).spawnChar(700, 780 + 300)
-    Character('WhiteWall.png', dynamic=False).spawnChar(2050, 300 + 300)
+    Character('WhiteBrickLeft.png', dynamic=False).spawnChar(2050, 300 + 300)
     PlatformerTextbox.runQueue()
 
     sign = funcHold('Sign.png')
