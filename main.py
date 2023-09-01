@@ -1,10 +1,10 @@
 from continuousCollision import *
 
 
-def startGame():
+def startGame(func):
     text = Character.canvas.create_text(width / 2, height / 2, text="Press A to start", fill="white", font="system 18")
     textFlicker(Character.root, Character.canvas, text)
-    Character.canvas.bind("<KeyPress-z>", lambda event: openCredit())
+    Character.canvas.bind("<KeyPress-z>", lambda event: openCredit(func))
 
 
 def textFlicker(root, canvas, text):
@@ -17,33 +17,32 @@ def textFlicker(root, canvas, text):
     Character.loopsRunning.append(loop)
 
 
-def openCredit():
+def openCredit(func):
     clearWindow()
     Character.canvas.create_text(width / 2, height / 2, text="by Jack Meyer Garvey", fill="white", font="system 32")
-    loop = Character.root.after(1200, bottomWell)
+    loop = Character.root.after(1200, func)
     Character.loopsRunning.append(loop)
 
 
 def bottomWell():
-    clearWindow()
+    brick = background('GrayBrickBack.png')
+    brick.spawn(415, 1067)
     brick = background('WhiteBrickBack.png')
-    brick.spawn(415, -133, numDown=5)
-    Character('WhiteBrickLeft.png', dynamic=False).spawnChar(600, 0)
-    Character('WhiteBrickRight.png', dynamic=False).spawnChar(400, 0)
-    Character('WhiteBrickCornerBR.png', dynamic=False).spawnChar(400, 1024)
-    Character('WhiteBrickCornerBL.png', dynamic=False).spawnChar(600, 1024)
-    Character('WhiteFloor.png', dynamic=False).spawnChar(0, 1224)
+    brick.spawn(475, -133, numDown=6)
+    Character('WhiteBrickLeft.png', dynamic=False).spawnChar(595, 0)
+    Character('WhiteBrickRight.png', dynamic=False).spawnChar(415, 0)
+    Character('ShadedBrickCornerBR.png', dynamic=False).spawnChar(415, 1024)
+    Character('ShadedBrickCornerBL.png', dynamic=False).spawnChar(595, 1024)
+    Character('WaterFloor.png', dynamic=False).spawnChar(0, 1224)
     You = Character(pic='blueBox.png', pic2='WhiteBox.png')
 
-    You.spawnChar(0, 1224-63)
+    You.spawnChar(0, 1224 - 63)
     You.gainControl()
 
     setLevelSize(1330, 1500)
-    physicsLoop()
 
 
 def testGame():
-    clearWindow()
     background('Clouds1.png', 0).spawn(0, 0)
     background('Clouds2.png', 2).spawn(0, 0)
     background('Clouds3.png', 1).spawn(0, 0)
@@ -72,7 +71,6 @@ def testGame():
     You.gainControl()
 
     setLevelSize(2400, 1500)
-    physicsLoop()
 
 
 width = 1330
@@ -87,7 +85,13 @@ Character.canvas = Canvas(Character.root, width=width, height=height, bg='black'
 PlatformerTextbox.textBox.canvas = Character.canvas
 Character.canvas.focus_set()
 
-startGame()
+startWorld()
+a = world(bottomWell, 'Well')
+world.location = a
+b = world(testGame, 'Test')
+a.link(b, 'r')
+
+startGame(a.run)
 Character.start = time()
 
 Character.canvas.pack()

@@ -223,6 +223,15 @@ def centerScreen():
                 for _ in range(P.count):
                     P.x[_] += netChange * 0.05 * P.layer * Character.xLevelSize
                     Character.canvas.coords(P.imageID[_], float(P.x[_]), float(P.y[_]))
+        if Character.controlled.x > Character.xLevelSize:
+            if world.location.right is not None:
+                stageTransition(world.location.right)
+        elif Character.controlled.y > Character.yLevelSize:
+            pass
+        elif Character.controlled.x + Character.controlled.image.width() < 0:
+            pass
+        elif Character.controlled.y + Character.controlled.image.height() < 0:
+            pass
 
 
 def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, height2, dt):
@@ -337,7 +346,8 @@ class Character:
     stableHashTable = {}
     collisions = {1: {}}
     controlled = None
-    keys = {'z': False, 'x': False, 'space': False, 'c': False, 'Left': False, 'Right': False, 'Up': False, 'Down': False}
+    keys = {'z': False, 'x': False, 'space': False, 'c': False, 'Left': False, 'Right': False, 'Up': False,
+            'Down': False}
     isGrounded = collections.deque(maxlen=4)
     jumpBuffer = 0
     oncePerFrame = []
@@ -802,6 +812,67 @@ class animation:
         self.packageIndex = index
 
 
+def stageTransition(wrld):
+    freezePhysics()
+    world.stageTransitionImageID = Character.canvas.create_image(Character.canvas.xview()[0] * Character.xLevelSize,
+                                                                 Character.canvas.yview()[0] * Character.yLevelSize,
+                                                                 anchor='nw',
+                                                                 image=world.stageTransitionImages[0])
+    for _, img in enumerate(world.stageTransitionImages[1:]):
+        loop = Character.root.after(25*_, nextTransitionImage, img)
+        Character.loopsRunning.append(loop)
+    loop = Character.root.after(25 * 8, wrld.run)
+    Character.loopsRunning.append(loop)
+
+
+def nextTransitionImage(img):
+    Character.canvas.itemconfig(world.stageTransitionImageID,
+                                image=img)
+
+
+def startWorld(name='slideTransition', num=7):
+    world.stageTransitionImages = [PhotoImage(file=f'{name}{_ + 1}.png') for _ in range(num)]
+
+
+class world:
+    stages = {}
+    location = None
+    stageTransitionImageID = None
+    stageTransitionImages = None
+
+    def __init__(self, func, name):
+        self.func = func
+        world.stages[name] = self
+        self.right = None
+        self.left = None
+        self.up = None
+        self.down = None
+
+    def setLocation(self):
+        world.location = self
+        self.func()
+
+    def link(self, stage, direction='r'):
+        if direction == 'r':
+            self.right = stage
+            stage.left = self
+
+    def run(self):
+        clearWindow()
+        self.func()
+        centerScreen()
+        world.stageTransitionImageID = Character.canvas.create_image(Character.canvas.xview()[0] * Character.xLevelSize,
+                                                                     Character.canvas.yview()[0] * Character.yLevelSize,
+                                                                     anchor='nw',
+                                                                     image=world.stageTransitionImages[-1])
+        for _, img in enumerate(reversed(world.stageTransitionImages[1:])):
+            loop = Character.root.after(25 * _, nextTransitionImage, img)
+            Character.loopsRunning.append(loop)
+        loop = Character.root.after(25 * 8, Character.canvas.delete, world.stageTransitionImageID)
+        loop = Character.root.after(25 * 8, physicsLoop)
+        Character.loopsRunning.append(loop)
+
+
 def clearWindow():
     """Destroys all widgets and ends all loops (including loops within text boxes)"""
     if Character.nextFrame is not None:
@@ -828,7 +899,8 @@ def clearWindow():
     Character.hashTable.clear()
     Character.collisions = {1: {}}
     Character.controlled = None
-    Character.keys = {'z': False, 'x': False, 'space': False, 'c': False, 'Left': False, 'Right': False, 'Up': False, 'Down': False}
+    Character.keys = {'z': False, 'x': False, 'space': False, 'c': False, 'Left': False, 'Right': False, 'Up': False,
+                      'Down': False}
     Character.oncePerFrame.clear()
     Character.grid = 300
     Character.dt = 20
@@ -838,7 +910,7 @@ def clearWindow():
     Character.canvas.pack()
 
     Character.dynamicChars.clear()
-    Character.notDynChars .clear()
+    Character.notDynChars.clear()
     Character.stableHashTable.clear()
     Character.isGrounded = collections.deque(maxlen=4)
     Character.jumpBuffer = 0
