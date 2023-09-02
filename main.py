@@ -25,20 +25,7 @@ def openCredit(func):
 
 
 def bottomWell():
-    brick = background('GrayBrickBack.png')
-    brick.spawn(415, 1067)
-    brick = background('WhiteBrickBack.png')
-    brick.spawn(475, -133, numDown=6)
-    Character('WhiteBrickLeft.png', dynamic=False).spawnChar(595, 0)
-    Character('WhiteBrickRight.png', dynamic=False).spawnChar(415, 0)
-    Character('ShadedBrickCornerBR.png', dynamic=False).spawnChar(415, 1024)
-    Character('ShadedBrickCornerBL.png', dynamic=False).spawnChar(595, 1024)
     Character('WaterFloor.png', dynamic=False).spawnChar(0, 1224)
-    You = Character(pic='blueBox.png', pic2='WhiteBox.png')
-
-    You.spawnChar(0, 1224 - 63)
-    You.gainControl()
-
     setLevelSize(1330, 1500)
 
 
@@ -88,10 +75,10 @@ Character.canvas.focus_set()
 startWorld()
 a = world(bottomWell, 'Well')
 world.location = a
-b = world(testGame, 'Test')
+b = world(bottomWell, 'Test')
 a.link(b, 'r')
 
-startGame(a.run)
+startGame(lambda: a.run(1330/2-63, 1224-63))
 Character.start = time()
 
 Character.canvas.pack()

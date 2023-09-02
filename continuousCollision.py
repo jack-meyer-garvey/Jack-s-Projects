@@ -225,13 +225,16 @@ def centerScreen():
                     Character.canvas.coords(P.imageID[_], float(P.x[_]), float(P.y[_]))
         if Character.controlled.x > Character.xLevelSize:
             if world.location.right is not None:
-                stageTransition(world.location.right)
+                stageTransition(world.location.right, 0, Character.controlled.y)
         elif Character.controlled.y > Character.yLevelSize:
-            pass
+            if world.location.down is not None:
+                stageTransition(world.location.down, Character.controlled.x, 0)
         elif Character.controlled.x + Character.controlled.image.width() < 0:
-            pass
+            if world.location.left is not None:
+                stageTransition(world.location.left, None, Character.controlled.y)
         elif Character.controlled.y + Character.controlled.image.height() < 0:
-            pass
+            if world.location.up is not None:
+                stageTransition(world.location.up, Character.controlled.x, None)
 
 
 def SweptAABB(x1, y1, x1_, y1_, width1, height1, x2, y2, x2_, y2_, width2, height2, dt):
@@ -399,7 +402,7 @@ class Character:
         """Draws character in given position"""
         self.x = Fraction(x)
         self.y = Fraction(y)
-        self.imageID = Character.canvas.create_image(x, y, anchor=anchor, image=self.image)
+        self.imageID = Character.canvas.create_image(float(x), float(y), anchor=anchor, image=self.image)
         if self.dynamic:
             for _ in self.rectangleTraversal(Character.grid, Character.dt):
                 if _ not in Character.hashTable:
@@ -543,23 +546,23 @@ class Character:
     def gainControl(self):
         """Binds the character controls and marks the given Character as being controlled"""
         Character.controlled = self
-        Character.canvas.bind("<KeyPress-space>", lambda event: key_pressed(event, self.jump))
-        Character.canvas.bind("<KeyRelease-space>", lambda event: key_release(event, self.jumpRelease))
-        Character.canvas.bind("<KeyPress-z>", lambda event: key_pressed(event, self.inspect))
-        Character.canvas.bind("<KeyRelease-z>", key_release)
-        Character.canvas.bind("<KeyPress-x>", key_pressed)
-        Character.canvas.bind("<KeyRelease-x>", key_release)
-        Character.canvas.bind("<KeyPress-c>", key_pressed)
-        Character.canvas.bind("<KeyRelease-c>", key_release)
-        Character.canvas.bind("<KeyPress-Up>", key_pressed)
-        Character.canvas.bind("<KeyRelease-Up>", key_release)
-        Character.canvas.bind("<KeyPress-Down>", key_pressed)
-        Character.canvas.bind("<KeyRelease-Down>", key_release)
-        Character.canvas.bind("<KeyPress-Left>", key_pressed)
-        Character.canvas.bind("<KeyRelease-Left>", key_release)
-        Character.canvas.bind("<KeyPress-Right>", key_pressed)
-        Character.canvas.bind("<KeyRelease-Right>", key_release)
-        Character.canvas.focus_set()
+        Character.root.bind("<KeyPress-space>", lambda event: key_pressed(event, self.jump))
+        Character.root.bind("<KeyRelease-space>", lambda event: key_release(event, self.jumpRelease))
+        Character.root.bind("<KeyPress-z>", lambda event: key_pressed(event, self.inspect))
+        Character.root.bind("<KeyRelease-z>", key_release)
+        Character.root.bind("<KeyPress-x>", key_pressed)
+        Character.root.bind("<KeyRelease-x>", key_release)
+        Character.root.bind("<KeyPress-c>", key_pressed)
+        Character.root.bind("<KeyRelease-c>", key_release)
+        Character.root.bind("<KeyPress-Up>", key_pressed)
+        Character.root.bind("<KeyRelease-Up>", key_release)
+        Character.root.bind("<KeyPress-Down>", key_pressed)
+        Character.root.bind("<KeyRelease-Down>", key_release)
+        Character.root.bind("<KeyPress-Left>", key_pressed)
+        Character.root.bind("<KeyRelease-Left>", key_release)
+        Character.root.bind("<KeyPress-Right>", key_pressed)
+        Character.root.bind("<KeyRelease-Right>", key_release)
+        Character.root.focus_set()
 
     def beneath(self, grid):
         for _ in np.arange(self.x // grid, (self.x + self.image.width()) // grid + 1):
@@ -657,14 +660,14 @@ def setLevelSize(xSize, ySize):
 
 
 def setScreenPositionX(x):
-    Character.xScreenPosition = x
-    PlatformerTextbox.textBox.xScreenPosition = min(max(0, x), Character.xLevelSize - int(1024 * 1.3))
+    x = min(max(0, x), Character.xLevelSize - int(1330))
+    PlatformerTextbox.textBox.xScreenPosition = Character.xScreenPosition = x
     Character.canvas.xview_moveto(x / Character.xLevelSize)
 
 
 def setScreenPositionY(y):
-    Character.yScreenPosition = y
-    PlatformerTextbox.textBox.yScreenPosition = min(max(0, y), Character.yLevelSize - int(768 * 1.1))
+    y = min(max(0, y), Character.yLevelSize - int(845))
+    PlatformerTextbox.textBox.yScreenPosition = Character.yScreenPosition = y
     Character.canvas.yview_moveto(y / Character.yLevelSize)
 
 
@@ -812,8 +815,9 @@ class animation:
         self.packageIndex = index
 
 
-def stageTransition(wrld):
+def stageTransition(wrld, x, y):
     freezePhysics()
+    world.location = wrld
     world.stageTransitionImageID = Character.canvas.create_image(Character.canvas.xview()[0] * Character.xLevelSize,
                                                                  Character.canvas.yview()[0] * Character.yLevelSize,
                                                                  anchor='nw',
@@ -821,7 +825,7 @@ def stageTransition(wrld):
     for _, img in enumerate(world.stageTransitionImages[1:]):
         loop = Character.root.after(25*_, nextTransitionImage, img)
         Character.loopsRunning.append(loop)
-    loop = Character.root.after(25 * 8, wrld.run)
+    loop = Character.root.after(25 * 8, wrld.run, x, y)
     Character.loopsRunning.append(loop)
 
 
@@ -857,9 +861,25 @@ class world:
             self.right = stage
             stage.left = self
 
-    def run(self):
+    def run(self, x, y):
         clearWindow()
         self.func()
+        if x is None:
+            x = Character.xLevelSize - Character.controlled.image.width()
+        if y is None:
+            y = Character.yLevelSize - Character.controlled.image.height()
+        if Character.controlled is not None:
+            boi = Character.controlled
+            Character.instances.append(boi)
+            Character.dynamicChars.append(boi)
+            boi.xPath = collections.deque(maxlen=3000)
+            boi.yPath = collections.deque(maxlen=3000)
+            boi.x_Path = collections.deque(maxlen=3000)
+            boi.y_Path = collections.deque(maxlen=3000)
+        else:
+            boi = Character(pic='blueBox.png', pic2='WhiteBox.png')
+            boi.gainControl()
+        boi.spawnChar(x, y)
         centerScreen()
         world.stageTransitionImageID = Character.canvas.create_image(Character.canvas.xview()[0] * Character.xLevelSize,
                                                                      Character.canvas.yview()[0] * Character.yLevelSize,
@@ -869,6 +889,7 @@ class world:
             loop = Character.root.after(25 * _, nextTransitionImage, img)
             Character.loopsRunning.append(loop)
         loop = Character.root.after(25 * 8, Character.canvas.delete, world.stageTransitionImageID)
+        Character.loopsRunning.append(loop)
         loop = Character.root.after(25 * 8, physicsLoop)
         Character.loopsRunning.append(loop)
 
@@ -898,10 +919,6 @@ def clearWindow():
     PlatformerTextbox.textBox.exitFunctions.clear()
     Character.hashTable.clear()
     Character.collisions = {1: {}}
-    Character.controlled = None
-    Character.keys = {'z': False, 'x': False, 'space': False, 'c': False, 'Left': False, 'Right': False, 'Up': False,
-                      'Down': False}
-    Character.oncePerFrame.clear()
     Character.grid = 300
     Character.dt = 20
     Character.canvas = Canvas(Character.root, width=1330, height=845, bg='black')
@@ -912,7 +929,6 @@ def clearWindow():
     Character.dynamicChars.clear()
     Character.notDynChars.clear()
     Character.stableHashTable.clear()
-    Character.isGrounded = collections.deque(maxlen=4)
     Character.jumpBuffer = 0
 
     funcHold.instances.clear()
