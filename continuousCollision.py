@@ -671,7 +671,7 @@ def setScreenPositionY(y):
     Character.canvas.yview_moveto(y / Character.yLevelSize)
 
 
-class Canvas(Canvas):
+class Tk(Tk):
     def unbind(self, sequence, funcId=None):
         """
         See:
@@ -704,8 +704,8 @@ class funcHold:
         self.func = list(func)
         self.x = 0
         self.y = 0
-        self.width = self.image.width() + 20
-        self.height = self.image.height() + 20
+        self.width = self.image.width()
+        self.height = self.image.height()
 
     def spawn(self, x, y):
         self.x = Fraction(x)
@@ -871,6 +871,7 @@ class world:
         if Character.controlled is not None:
             boi = Character.controlled
             Character.instances.append(boi)
+            boi.index = len(Character.instances) - 1
             Character.dynamicChars.append(boi)
             boi.xPath = collections.deque(maxlen=3000)
             boi.yPath = collections.deque(maxlen=3000)

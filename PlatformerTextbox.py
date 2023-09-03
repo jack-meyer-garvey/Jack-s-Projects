@@ -4,7 +4,7 @@ import re
 import collections
 
 
-class Canvas(Canvas):
+class Tk(Tk):
     def unbind(self, sequence, funcId=None):
         """
         See:
@@ -47,9 +47,9 @@ def closeBoxes():
         textBox.canvas.delete(textBox.imagesShown[_])
         textBox.imagesShown[_] = -1
     if textBox.bindingX is not None:
-        textBox.canvas.unbind("<KeyPress-x>", textBox.bindingX)
+        textBox.root.unbind("<KeyPress-x>", textBox.bindingX)
         textBox.bindingX = None
-    textBox.canvas.unbind("<KeyPress-z>", textBox.bindingZ)
+    textBox.root.unbind("<KeyPress-z>", textBox.bindingZ)
     textBox.bindingZ = None
     textBox.imageInstances.clear()
     for _ in textBox.exitFunctions:
@@ -118,9 +118,9 @@ def makeOption(options):
         textBox.arrow = textBox.arrow * 10 + 1
 
         textBox.arrowBindings.append(
-            textBox.canvas.bind("<KeyPress-Down>", lambda event: moveArrow(event, this, options), '+'))
+            textBox.root.bind("<KeyPress-Down>", lambda event: moveArrow(event, this, options), '+'))
         textBox.arrowBindings.append(
-            textBox.canvas.bind("<KeyPress-Up>", lambda event: moveArrow(event, this, options), '+'))
+            textBox.root.bind("<KeyPress-Up>", lambda event: moveArrow(event, this, options), '+'))
 
 
 def nextQueue():
@@ -128,8 +128,8 @@ def nextQueue():
     arrow meets the condition of the next box in the queue, it runs it. Otherwise, it moves on to the next one """
     clearText()
     if len(textBox.arrowBindings) != 0:
-        textBox.canvas.unbind("<KeyPress-Down>", textBox.arrowBindings[0])
-        textBox.canvas.unbind("<KeyPress-Up>", textBox.arrowBindings[1])
+        textBox.root.unbind("<KeyPress-Down>", textBox.arrowBindings[0])
+        textBox.root.unbind("<KeyPress-Up>", textBox.arrowBindings[1])
         textBox.arrowBindings.clear()
 
     if len(textBox.textQueue) != 0:
@@ -153,28 +153,28 @@ def nextQueue():
 def skipText(text, options):
     """Skips through the text that is currently being written and binds the z key to move to the next text box"""
     if textBox.bindingX is not None:
-        textBox.canvas.unbind("<KeyPress-x>", textBox.bindingX)
+        textBox.root.unbind("<KeyPress-x>", textBox.bindingX)
     textBox.bindingX = None
     if textBox.bindingZ is not None:
-        textBox.canvas.unbind("<KeyPress-z>", textBox.bindingZ)
+        textBox.root.unbind("<KeyPress-z>", textBox.bindingZ)
         textBox.bindingZ = None
     if textBox.textShown['mainText'] is not None:
         clearText()
         makeText(text)
-        textBox.bindingZ = textBox.canvas.bind("<KeyPress-z>", lambda event: nextQueue(), '+')
+        textBox.bindingZ = textBox.root.bind("<KeyPress-z>", lambda event: nextQueue(), '+')
         makeOption(options)
 
 
 def runBox(textSpeed, text, options, face):
     """Types out text at a given speed. Also binds the x and z keys to move through text boxes"""
     if textBox.bindingX is not None:
-        textBox.canvas.unbind("<KeyPress-x>", textBox.bindingX)
+        textBox.root.unbind("<KeyPress-x>", textBox.bindingX)
         textBox.bindingX = None
     if textBox.bindingZ is not None:
-        textBox.canvas.unbind("<KeyPress-z>", textBox.bindingZ)
+        textBox.root.unbind("<KeyPress-z>", textBox.bindingZ)
         textBox.bindingZ = None
     if textBox.imagesShown['face'] != -1:
-        textBox.canvas.delete(textBox.imagesShown['face'])
+        textBox.root.delete(textBox.imagesShown['face'])
     if face is not None:
         if textBox.imagesShown['faceBox'] == -1:
             faceBox(148 + textBox.xScreenPosition, 690 + textBox.yScreenPosition)
@@ -193,7 +193,7 @@ def runBox(textSpeed, text, options, face):
         textBox.loopsRunning.append(loop)
 
     if textBox.bindingX is None:
-        textBox.bindingX = textBox.canvas.bind("<KeyPress-x>", lambda event: skipText(text, options), '+')
+        textBox.bindingX = textBox.root.bind("<KeyPress-x>", lambda event: skipText(text, options), '+')
 
     loop = textBox.root.after(wait, bindZ)
     textBox.loopsRunning.append(loop)
@@ -203,9 +203,9 @@ def runBox(textSpeed, text, options, face):
 
 def bindZ():
     """Function specifically used to save the binding for the Z button while also setting it in an after loop"""
-    textBox.bindingZ = textBox.canvas.bind("<KeyPress-z>", lambda event: nextQueue(), '+')
+    textBox.bindingZ = textBox.root.bind("<KeyPress-z>", lambda event: nextQueue(), '+')
     if textBox.bindingX is not None:
-        textBox.canvas.unbind("<KeyPress-x>", textBox.bindingX)
+        textBox.root.unbind("<KeyPress-x>", textBox.bindingX)
         textBox.bindingX = None
 
 

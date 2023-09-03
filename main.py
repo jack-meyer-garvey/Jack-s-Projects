@@ -24,8 +24,17 @@ def openCredit(func):
     Character.loopsRunning.append(loop)
 
 
-def bottomWell():
+def tutorial1():
     Character('WaterFloor.png', dynamic=False).spawnChar(0, 1224)
+    Character('WhiteWall.png', dynamic=False).spawnChar(-63, 500)
+    sign = funcHold('Sign.png')
+    sign.queueText("Do you like it?", options=["Yes", "No", " Maybe LOL"])
+    sign.spawn(1330/2-63, 1224-63)
+    setLevelSize(1330, 1500)
+
+
+def tutorial2():
+    Character('WhiteFloor.png', dynamic=False).spawnChar(0, 1224)
     setLevelSize(1330, 1500)
 
 
@@ -73,9 +82,9 @@ PlatformerTextbox.textBox.canvas = Character.canvas
 Character.canvas.focus_set()
 
 startWorld()
-a = world(bottomWell, 'Well')
+a = world(tutorial1, 't1')
 world.location = a
-b = world(bottomWell, 'Test')
+b = world(tutorial2, 't2')
 a.link(b, 'r')
 
 startGame(lambda: a.run(1330/2-63, 1224-63))
